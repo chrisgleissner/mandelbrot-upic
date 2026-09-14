@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**Mandelbrot Upic** — a Commodore 64 Ultimate demo that generates a
+**Mandelbrot Upic** — an Ultimate 64 demo that generates a
 Mandelbrot fractal on-device at 64 MHz turbo, packs it directly into
 Upic format (a 16-color, 384x256 border-color raster picture
 technique), displays it live as it renders, and lets the user

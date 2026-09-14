@@ -2,7 +2,7 @@
 
 ![The Mandelbrot set at the default overview, default blue/orange palette, on real Ultimate 64 hardware](screenshots/default-palette.png)
 
-A Commodore 64 Ultimate demo that generates a Mandelbrot fractal
+An Ultimate 64 demo that generates a Mandelbrot fractal
 on-device at 64 MHz turbo, packs it directly into Upic format (a
 16-color, 384x256 border-color raster picture technique), displays it
 live as it renders, and lets you interactively pan around and zoom
@@ -85,8 +85,10 @@ with no graceful exit path. See `docs/ZOOM_FEATURE.md` for why.
 ## Installation
 
 Requires **firmware 3.15 or newer**. As of this release, that means an
-**Ultimate 64 Elite 2** in practice -- the corresponding firmware for
-the original Ultimate 64 (C64U) board hasn't been released yet.
+**Ultimate 64 Elite 2** in practice -- the Commodore 64 Ultimate (C64U),
+a separate product built on the Elite 2 design with some different
+hardware choices and its own firmware branch, doesn't yet have the
+corresponding firmware release.
 
 1. Copy both `mandelupic.prg` and `mandelupic.cfg` onto your Ultimate's
    SD card or USB storage, in the same folder -- extracting the
