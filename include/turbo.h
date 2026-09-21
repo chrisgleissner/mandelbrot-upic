@@ -23,6 +23,9 @@ deliberately slow (unoptimised) loop runs long enough.
 Supported hardware:
   Ultimate 64 original / Elite I  — max ~48 MHz
   Ultimate 64 Elite II / C64U     — max ~64 MHz
+
+This project tells the two apart with a raster-timed probe in
+upic_select_display_path() (upic_viewer.c), not turbo_detect().
 ******************************************************************/
 
 #ifndef _TURBO_H_
@@ -54,22 +57,34 @@ Supported hardware:
 //   bits 4-6 : reserved, write 0
 // ---------------------------------------------------------------
 
-#define TURBO_SPEED_1MHZ    0x00   // Standard 1 MHz
+// Index -> MHz differs between hardware generations (1541ultimate
+// software/u64/u64_config.cc, speeds_u64 / speeds_u64ii):
+//
+//   index         0 1 2 3 4 5 6  7  8  9  10 11 12 13 14 15
+//   U64/Elite I   1 2 3 4 5 6 8  10 12 14 16 20 24 32 40 48
+//   Elite II/C64U 1 2 3 4 6 8 10 12 14 16 20 24 32 40 48 64
+//
+// The names below follow the Elite II / C64U column. Corrected
+// 2026-09-21: indexes 6-13 previously carried names (12, 16, 20, 24,
+// 28, 32, 36, 40 MHz) that match neither table. Only TURBO_SPEED_1MHZ,
+// TURBO_SPEED_48MHZ (the force48 test build) and TURBO_SPEED_MAX are
+// used by this project.
+#define TURBO_SPEED_1MHZ    0x00   // Standard 1 MHz (both)
 #define TURBO_SPEED_2MHZ    0x01
 #define TURBO_SPEED_3MHZ    0x02
 #define TURBO_SPEED_4MHZ    0x03
-#define TURBO_SPEED_6MHZ    0x04
-#define TURBO_SPEED_8MHZ    0x05
-#define TURBO_SPEED_12MHZ   0x06
-#define TURBO_SPEED_16MHZ   0x07
-#define TURBO_SPEED_20MHZ   0x08
-#define TURBO_SPEED_24MHZ   0x09
-#define TURBO_SPEED_28MHZ   0x0A
-#define TURBO_SPEED_32MHZ   0x0B
-#define TURBO_SPEED_36MHZ   0x0C
+#define TURBO_SPEED_6MHZ    0x04   // 5 MHz on U64 / Elite I
+#define TURBO_SPEED_8MHZ    0x05   // 6 MHz on U64 / Elite I
+#define TURBO_SPEED_10MHZ   0x06
+#define TURBO_SPEED_12MHZ   0x07
+#define TURBO_SPEED_14MHZ   0x08
+#define TURBO_SPEED_16MHZ   0x09
+#define TURBO_SPEED_20MHZ   0x0A
+#define TURBO_SPEED_24MHZ   0x0B
+#define TURBO_SPEED_32MHZ   0x0C
 #define TURBO_SPEED_40MHZ   0x0D
-#define TURBO_SPEED_48MHZ   0x0E
-#define TURBO_SPEED_MAX     0x0F   // Highest supported by this hardware
+#define TURBO_SPEED_48MHZ   0x0E   // 40 MHz on U64 / Elite I
+#define TURBO_SPEED_MAX     0x0F   // 64 MHz Elite II / C64U, 48 MHz U64 / Elite I
 
 #define TURBO_BADLINES_ON   0x00   // Normal VIC-II badline CPU stalls
 #define TURBO_BADLINES_OFF  0x80   // Suppress badline stalls

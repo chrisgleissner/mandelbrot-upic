@@ -1006,9 +1006,15 @@ static void render_line_pixels(void)
 // MMAP_NO_ROM is active (see upic_show_frame()) and turbo is enabled
 // (see turbo_fast(), include/turbo.h) -- at 1 MHz this loop cannot
 // keep up with the raster beam at all.
-static void render_frame(void)
+//
+// A named __asm block rather than a C function wrapping inline asm
+// (2026-09-21) so upic_select_display_path() below can reach its two
+// patchable immediate operands by label (render_frame.trb/.dly, the
+// same `block.label` addressing crt.c's own runtime uses). The emitted
+// bytes are unchanged from the C-function version: that version had
+// no prologue/epilogue beyond the trailing rts added here by hand.
+__asm render_frame
 {
-    __asm {
         lda #$00                 // let VIC-II rest: DEN=0 widens the
         sta $d011                // "border" to the whole visible area
                                   // (also zeroes the raster-IRQ compare
@@ -1035,6 +1041,7 @@ static void render_frame(void)
         beq linewait
 
         lda #$80                 // resync: rewrite turbo control regs
+    trb:                         // operand patched by upic_select_display_path()
         ldx #$8f
         sta $d031
         stx $d031
@@ -1071,6 +1078,12 @@ static void render_frame(void)
         //              confirmed via screenshot with all 4 corner-
         //              marker blobs measured, not eyeballed). This is
         //              the value in use.
+        //
+        // This is the 64 MHz value. upic_select_display_path() patches
+        // the operand to UPIC_DELAY_48 on a 48 MHz machine -- see that
+        // function's comment for the per-line cycle budget, which also
+        // shows why $87 has only 2 sub-slots to spare.
+    dly:
         ldx #$87
     delay:
         dex
@@ -1084,10 +1097,191 @@ static void render_frame(void)
         iny
         cpy #$00                 // 256 rows -- Y wraps 255->0 to exit
         bne line
-    }
+        rts
 }
 
 #pragma code(code)
+
+// ---------------------------------------------------------------
+// 48 MHz display path (2026-09-21) -- Ultimate 64 / Elite I support.
+//
+// Ultimate 64 turbo CPU timing: each phi2 cycle offers as many CPU
+// sub-slots as the board's top speed (64 on Elite II / C64U, 48 on
+// U64 / Elite I), and the $D031 speed index selects how many of them
+// the CPU may use -- all of them at the top index, one per phi2 at
+// index 0 (1 MHz). The VIC-II uses one sub-slot of every phi2 for its
+// own memory access, so the top index gives 63 CPU cycles per phi2 on
+// Elite II / C64U and 47 on U64 / Elite I. A PAL line is 63 phi2 and
+// 504 dots.
+//
+// Everything above was tuned for 64 MHz: 8 cycles per border-colour
+// write is about one dot. At 48 MHz the unchanged routine would need
+// 192 * 16 = 3072 cycles per line against 63 * 47 = 2961 available,
+// so it cannot fit. The 48 MHz path therefore shows every packed
+// byte's LOW nibble only (the even pixel of each pair) as one pixel
+// about 2 dots wide: 12 cycles per byte column, 2304 cycles per line.
+// The picture buffer, the generator and zoom.c are unchanged --
+// zoom.c's 2x2 corner markers always cover one even pixel, so they
+// stay visible.
+//
+// Rather than a second 2 KB copy of render_line_pixels() (upiccode has
+// ~18 bytes to spare, see the .map), the existing routine is patched in
+// place, keeping its 12-byte stride per byte column:
+//
+//   64 MHz (as built)            48 MHz (patched)
+//   BE lo hi  ldx col,y     4    B9 lo hi  lda col,y        4
+//   8E 20 D0  stx $d020     4    9D 20 D0  sta $d020,x      5  (X = 0)
+//   BD nl nh  lda nybbles,x 4    4C nx ny  jmp next column  3
+//   8D 20 D0  sta $d020     4    8D 20 D0  (skipped)
+//
+// = 12 cycles between border-colour writes. `sta abs,x` is used for its
+// fixed 5 cycles (indexed stores never take a page-crossing shortcut)
+// and `jmp` for its fixed 3, so no instruction's timing depends on data
+// or on where the column lands in memory. X is always 0 on entry: it
+// is left there by render_frame's own `dex / bne delay` loop, and the
+// patched routine never loads X. The last column's jmp lands on the
+// routine's original trailing rts. 47 cycles per phi2 do not divide
+// evenly into 12-cycle steps, so about one pixel in 24 is 3 dots wide
+// instead of 2 -- the same kind of effect as the 64 MHz path, where 63
+// cycles per phi2 make about one pixel in 64 two dots wide.
+//
+// Line budget. render_frame's `sta $d031 (#$80) / stx $d031 (#$8f)`
+// drops to index 0 for the stx's last three cycles, which then finish
+// at the end of three successive phi2 cycles; turbo resumes at the
+// start of phi2 cycle 4 on every line, whatever the polling jitter
+// was. From there to the end of the line are 60 phi2 cycles:
+// 60 * 63 = 3780 CPU cycles at 64 MHz, 60 * 47 = 2820 at 48 MHz. The
+// next line's `lda $d012` (a VIC register read costs one extra
+// sub-slot) must finish before the line ends:
+//
+//   64 MHz: 2 + (5*135-1) + 6 + 3072 + 6 + 13 + 5 = 3778 of 3780
+//   48 MHz: 2 + (5*D-1)   + 6 + 2304 + 6 + 13 + 5 = 5*D + 2335 of 2820
+//
+// The 64 MHz value $87 therefore has 2 sub-slots to spare, which
+// matches the hardware bisection in render_frame (the next tested
+// value, $A5, skews). D must be at most 97; 96 leaves 5 to spare. With
+// D = 96 the 48 MHz picture starts 3 dots left of the 64 MHz one and
+// ends 1 dot short of it (dot positions measured in
+// tests/test_turbo_modes.py).
+//
+// render_frame operands patched:
+//   - dly: the delay before the first pixel, $87 -> UPIC_DELAY_48.
+//   - trb: the turbo control byte rewritten on every line. Speed index
+//     15 ($8F, as built) is already 48 MHz on an Ultimate 64 / Elite I,
+//     so the release build leaves it alone. The test-only
+//     UPIC_FORCE_48MHZ build (`make force48`) patches it to $8E --
+//     index 14, which is 48 MHz on Elite II / C64U -- so this path can
+//     be checked on a 64 MHz machine.
+//
+// Speed probe. Times a fixed 64764-cycle loop against the raster
+// counter, which advances at the real PAL line rate whatever the CPU
+// speed. Every loop-back is an absolute jmp (always 3 cycles), so the
+// count does not depend on where the linker places this function:
+//
+//   64 MHz: 64764 / (63 * 63) = 16.3 lines -> $D012 ends at $30
+//   48 MHz: 64764 / (63 * 47) = 21.9 lines -> $D012 ends at $35/$36
+//
+// The Ultimate 64 runs the CPU at 1 MHz for a few seconds after every
+// CPU reset, whatever $D031 says, and briefly after IEC bus activity
+// -- this probe runs well inside the first window when the program is
+// started from the Ultimate menu. A whole loop at 1 MHz
+// spans 1028 lines and deterministically ends at $7C, which is
+// rejected. A loop during which the forced window ends can end on any
+// line, so a result is only accepted once two consecutive loops agree
+// on the same class; at most one loop per window can be affected.
+//
+// One-way: called once at startup, before the first frame, and never
+// undone. Lives in "main" (not upiccode) since it runs only once.
+// tests/test_turbo_modes.py runs this exact compiled code against a
+// model of the U64's turbo CPU timing (tests/machine.py).
+// ---------------------------------------------------------------
+#define UPIC_DELAY_48       96
+#define UPIC_PROBE_START    0x20
+#define UPIC_PROBE_64MHZ    (UPIC_PROBE_START + 19)   // below: 64 MHz
+#define UPIC_PROBE_VALID    (UPIC_PROBE_START + 26)   // below: 48 MHz; else retry
+
+#ifndef UPIC_FORCE_48MHZ
+// Probe result: 1 = 64 MHz, 0 = 48 MHz. The whole retry loop is one
+// asm block writing a file-scope static, not C control flow around a
+// shorter asm block: written that way Oscar64 duplicated the asm body
+// three times and read the result before the loop (checked in the
+// -g .asm listing), the inline-asm hazard oscar64manual.md describes.
+// Starts at 2 (no valid result yet) as initialized data rather than
+// an asm store, which saved 5 bytes of the "main" region.
+static unsigned char upic_probe_class = 2;
+#endif
+
+void upic_select_display_path(void)
+{
+#ifndef UPIC_FORCE_48MHZ
+    __asm {
+    retry:
+    f1:
+        lda $d011                // wait for the bottom of the frame...
+        bpl f1
+    f2:
+        lda $d011                // ...then for the raster to wrap to 0
+        bmi f2
+        lda #UPIC_PROBE_START
+    w:
+        cmp $d012
+        bne w
+
+        ldy #36                  // 36 * 1799 = 64764 cycles
+    o:
+        ldx #0
+    i:
+        dex
+        beq id
+        jmp i
+    id:
+        dey
+        beq od
+        jmp o
+    od:
+        lda $d012
+        ldx #2
+        cmp #UPIC_PROBE_VALID
+        bcs store                // forced slow-down: class 2, measure again
+        dex
+        cmp #UPIC_PROBE_64MHZ
+        bcc same                 // class 1: 64 MHz
+        dex                      // class 0: 48 MHz
+    same:
+        cpx upic_probe_class
+        beq done                 // two loops in a row agree
+    store:
+        stx upic_probe_class
+        jmp retry
+    done:
+    }
+    if (upic_probe_class)
+        return;
+#endif
+
+    char *p = (char *)(unsigned)render_line_pixels;
+    unsigned char c;
+
+    for (c = 0; c < UPIC_WIDTH / 2; c++)
+    {
+        char *next = p + 12;
+        p[0] = 0xb9;   // ldx abs,y  -> lda abs,y (same column address)
+        p[3] = 0x9d;   // stx $d020  -> sta $d020,x
+        p[6] = 0x4c;   // lda nybbles,x -> jmp next
+        p[7] = (unsigned char)((unsigned)next & 0xff);
+        p[8] = (unsigned char)((unsigned)next >> 8);
+        p = next;
+    }
+
+    __asm {
+        lda #UPIC_DELAY_48
+        sta render_frame.dly + 1
+#ifdef UPIC_FORCE_48MHZ
+        lda #$8e                 // TURBO_SPEED_48MHZ | TURBO_BADLINES_OFF
+        sta render_frame.trb + 1
+#endif
+    }
+}
 
 // ---------------------------------------------------------------
 // C-level wrapper: stays in the normal, always-executable default
@@ -1119,7 +1313,7 @@ char upic_show_frame(void)
     // "any key press drops to text mode" crash -- see main.c's own
     // comment for the full story. A local re-enable here would have
     // undone that for the gap between frames.
-    render_frame();
+    __asm { jsr render_frame }
 
     keyb_poll();
     return key_pressed(KSCAN_SPACE);
@@ -1290,8 +1484,13 @@ void upic_restore_display(void)
 // down to the exact minimum (68) before picking 80 for a little
 // margin. 210 was never a measured requirement, just an unexamined
 // round-number default -- nothing here needed anywhere near that much.
+// Shrunk 80 -> 72 (2026-09-21): upic_select_display_path() (48 MHz
+// support) needed 8 more bytes in "main" than were left. The minimum
+// was re-bisected on that build and is still 68 (66 fails with the
+// error above), so 72 keeps 4 bytes over it. Region now has 0 bytes
+// free: BSS ends exactly where the stack section starts.
 #pragma heapsize(0)
-#pragma stacksize(80)
+#pragma stacksize(72)
 #pragma region(main, 0x0853, 0x1800, , , {code, data, bss, heap, stack})
 
 // modlowbss: $0200-$0800, BSS ONLY -- confirmed by direct test (2026-09-09)

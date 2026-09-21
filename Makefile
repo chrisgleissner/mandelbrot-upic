@@ -86,6 +86,11 @@ ALLSRCS = $(MAINSRC) \
 # Output
 TARGET = build/$(MAIN).prg
 
+# Test-only build: always takes the 48 MHz display path (at speed index
+# 14, which is 48 MHz on Elite II / C64U), so that path can be checked
+# on a 64 MHz machine. Not part of the release ZIP -- see src/main.c.
+FORCE48 = build/$(MAIN)-force48.prg
+
 # Ultimate 64 config preset (enables Command Interface + U64 turbo
 # registers this demo needs). Deployed/zipped as $(MAIN).cfg -- SAME
 # base name as $(MAIN).prg, in the SAME directory -- so the Ultimate's
@@ -111,13 +116,25 @@ ZIPFILE  = build/$(MAIN)-$(VERSION).zip
 README   = README.pdf
 
 .SUFFIXES:
-.PHONY: all clean deploy check-deploy zip docs
+.PHONY: all clean deploy check-deploy zip docs force48 test deploy-force48
 
 all: $(TARGET) $(README) zip
 
 $(TARGET): $(ALLSRCS)
 	@$(MKDIR) build 2>$(NULLDEV) ; true
 	$(CC) $(CFLAGS) -n -o=$(TARGET) $<
+
+force48: $(FORCE48)
+
+$(FORCE48): $(ALLSRCS)
+	@$(MKDIR) build 2>$(NULLDEV) ; true
+	$(CC) $(CFLAGS) -dUPIC_FORCE_48MHZ -n -o=$(FORCE48) $<
+
+# Host-side tests (Python 3 standard library only): run the compiled
+# 6502 code from both PRGs in tests/mos6502.py's cycle-counting emulator
+# against a raster-line model at 48 and 64 MHz. See tests/README.md.
+test: $(TARGET) $(FORCE48)
+	python3 -m unittest discover -s tests -v
 
 clean:
 	$(DEL) build/*.prg 2>$(NULLDEV) ; true
@@ -155,3 +172,9 @@ check-deploy:
 deploy: check-deploy $(TARGET)
 	wput -u $(TARGET) $(ULTFTP1)$(MAIN).prg
 	wput -u $(CONFIGFILE) $(ULTFTP1)$(MAIN).cfg
+
+# Deploys the force48 test PRG next to the release one, with its own
+# copy of the config so the firmware auto-loads it the same way.
+deploy-force48: check-deploy $(FORCE48)
+	wput -u $(FORCE48) $(ULTFTP1)$(MAIN)-force48.prg
+	wput -u $(CONFIGFILE) $(ULTFTP1)$(MAIN)-force48.cfg

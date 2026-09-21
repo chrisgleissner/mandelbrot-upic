@@ -89,16 +89,16 @@ In "Turbo Enable Bit" mode, `$D031` reads as `0x00` and the speed is controlled 
 
 **Detection:** Reading `$D031` returns `$FF` when turbo registers are unavailable. Any non-`$FF` value confirms U64 turbo registers are present.
 
-**Speed index approximate frequencies (both Elite-I and Elite-II):**
+**Speed index frequencies** (from 1541ultimate `software/u64/u64_config.cc`, `speeds_u64` / `speeds_u64ii`):
 
-| Index | Approximate speed |
-|-------|------------------|
-| 0 | 1 MHz |
-| 1–13 | 2–40 MHz (intermediate) |
-| 14 | 48 MHz |
-| 15 | 48 MHz (Elite I) or 64 MHz (Elite II / C64U) |
+| Index | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| U64 / Elite I (MHz) | 1 | 2 | 3 | 4 | 5 | 6 | 8 | 10 | 12 | 14 | 16 | 20 | 24 | 32 | 40 | 48 |
+| Elite II / C64U (MHz) | 1 | 2 | 3 | 4 | 6 | 8 | 10 | 12 | 14 | 16 | 20 | 24 | 32 | 40 | 48 | 64 |
 
-Index 15 is the hardware maximum. On Elite-I this is ~48 MHz; on Elite-II / C64U it is ~64 MHz. Software cannot distinguish these cases from the register value alone — both report index 15.
+Index 15 is the hardware maximum: 48 MHz on U64 / Elite I, 64 MHz on Elite II / C64U. The register value alone does not tell them apart. The Mandelbrot Upic demo measures it against the raster counter in `upic_select_display_path()` (`upic_viewer.c`; see `docs/UPIC_VIEWER.md`).
+
+The VIC-II takes one of the CPU's sub-slots in every phi2 cycle, so the top index gives 63 (Elite II / C64U) or 47 (U64 / Elite I) CPU cycles per phi2, not 64 or 48. See `docs/UPIC_VIEWER.md`.
 
 ### `$D030` — Turbo Enable Bit (conditional)
 
@@ -129,8 +129,10 @@ All constants are in `include/turbo.h`.
 | `TURBO_SPEED_1MHZ` | `0x00` | 1 MHz |
 | `TURBO_SPEED_2MHZ` | `0x01` | 2 MHz |
 | … | … | … |
-| `TURBO_SPEED_48MHZ` | `0x0E` | 48 MHz |
-| `TURBO_SPEED_MAX` | `0x0F` | Hardware maximum |
+| `TURBO_SPEED_48MHZ` | `0x0E` | 48 MHz (40 MHz on U64 / Elite I) |
+| `TURBO_SPEED_MAX` | `0x0F` | Hardware maximum (64 or 48 MHz) |
+
+The names follow the Elite II / C64U table (see §4).
 
 ### Badline and convenience constants
 
@@ -333,9 +335,9 @@ unsigned char idx = turbo_get() & 0x0F;
 - **Turbo Enable Bit**: `$D031 == 0x00`; detection uses `$D030` bit 0 fallback.
 - **U64 Turbo Registers**: full support, recommended.
 
-### 48 vs 64 MHz indistinguishable from software
+### 48 vs 64 MHz not visible in the register
 
-Speed index `0x0F` is the maximum on all U64 variants but maps to different absolute frequencies. `TURBO_64MHZ` is reported as a best-effort classification. UCI hardware info (`uii_get_hwinfo`) may help distinguish variants at the application level.
+Speed index `0x0F` is the maximum on all U64 variants but maps to different absolute frequencies. `turbo_detect()`'s `TURBO_64MHZ` is a best-effort classification with uncalibrated thresholds. It also measures 1 MHz for a few seconds after a CPU reset, because the Ultimate 64 runs the CPU at 1 MHz then regardless of `$D031`. See `upic_select_display_path()` in `upic_viewer.c` for a raster-timed probe that handles that.
 
 ### Speed changes are instantaneous
 

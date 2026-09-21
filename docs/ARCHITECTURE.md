@@ -16,7 +16,11 @@ own attribution.
    [Interrupts](#interrupts) below).
 2. Detect the Ultimate Command Interface (UCI) and push the default
    color palette.
-3. Enable 64 MHz turbo.
+3. Enable turbo at speed index 15 (64 MHz on Elite II / C64U, 48 MHz
+   on an original Ultimate 64 / Elite I). `upic_select_display_path()`
+   measures which of the two it is and, on a 48 MHz machine, switches
+   the renderer to its half-horizontal-resolution path (see
+   `docs/UPIC_VIEWER.md`).
 4. Generate the fractal (`mandelbrot_generate()`), showing it live as
    it builds.
 5. Loop forever: let the user browse/zoom/cycle the palette
@@ -69,7 +73,14 @@ verified-not-assumed object placement near its `$10000` boundary.
 
 ## Testing
 
-No emulator automation exists for this platform -- VICE specifically
-doesn't emulate the Ultimate's own UCI/turbo hardware this project
-depends on. Manual/visual testing on real Ultimate 64 hardware is the
-only way to confirm any change affecting the display or controls.
+No emulator automation exists for the whole program -- VICE doesn't
+emulate the Ultimate's own UCI/turbo hardware this project depends on.
+Manual/visual testing on real Ultimate 64 hardware is the only way to
+confirm any change affecting the display or controls.
+
+`make test` runs host-side tests (`tests/`, see `tests/README.md`) that
+execute the compiled renderer, the 48 MHz patcher and the speed probe
+in a cycle-counting 6502 emulator attached to a model of the U64's
+turbo CPU timing.
+They check instruction timing and patch contents, not the picture on
+a real screen.

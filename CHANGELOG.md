@@ -1,5 +1,40 @@
 # Changelog
 
+## [Unreleased]
+
+One PRG for both turbo ceilings: Ultimate 64 Elite II / C64U (64 MHz)
+and original Ultimate 64 / Elite I (48 MHz).
+
+- At startup, `upic_select_display_path()` (`upic_viewer.c`) times a
+  fixed 64,764-cycle loop against the VIC-II raster counter: 16.3 PAL
+  lines at 64 MHz, 21.9 at 48 MHz. It retries while the FPGA's forced
+  1 MHz mode (a few seconds after every reset) is still active, and only
+  accepts a result that two loops in a row agree on.
+- On a 48 MHz machine it patches the Upic line renderer in place to
+  show each packed byte's even pixel as one pixel about 2 dots wide
+  (12 cycles per byte column instead of 16 for two pixels), and
+  shortens the render delay from 135 to 96 loop passes. The line then
+  has 5 CPU sub-slots to spare, against 2 for the 64 MHz path. The
+  picture starts 3 dots further left and ends 1 dot short of the 64 MHz
+  picture. On a 64 MHz machine nothing is patched and the render code
+  runs as in v1.0.3.
+- `make force48` builds a test-only PRG that always takes the 48 MHz
+  path at speed index 14 (48 MHz on Elite II / C64U), so the path can
+  be checked on a 64 MHz machine.
+- New host-side tests (`make test`, `tests/`): a cycle-counting 6502
+  emulator runs the compiled renderer, patcher and probe from both
+  PRGs against a model of the U64's turbo CPU timing. The model
+  reproduces the hardware-bisected render delay (`$87` fits, `$A5`
+  skews).
+- `turbo.h`: corrected the `TURBO_SPEED_*` names for indexes 6-13 to
+  the firmware's actual speed table, and documented that the table
+  differs on an original Ultimate 64 / Elite I (index 14 = 40 MHz,
+  index 15 = 48 MHz there).
+- The default `main` code region now has 0 bytes free, and
+  `stacksize` went from 80 to 72 (the compiler-checked minimum is 68).
+  A startup key to force the 48 MHz path did not fit, which is why
+  that is a separate build.
+
 ## [1.0.3]
 
 Rebalances the escape-time color mapping again and repositions white

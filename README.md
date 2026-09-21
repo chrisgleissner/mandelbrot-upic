@@ -8,6 +8,14 @@ on-device at 64 MHz turbo, packs it directly into Upic format (a
 live as it renders, and lets you interactively pan around and zoom
 into any region of the result.
 
+The same PRG also runs on an original Ultimate 64 or Ultimate 64 Elite
+(48 MHz turbo maximum). It measures the CPU speed at startup and, on a
+48 MHz machine, shows the picture at half horizontal resolution (192
+pixels per line, each about 2 dots wide) at nearly the same size and
+screen position. The 48 MHz path has so far only been checked by the
+host-side tests (see [Make targets](#make-targets)), not yet on real
+hardware.
+
 See `CREDITS.md` for full attribution.
 
 **Status**: v1.0.3, feature-complete and confirmed working on real
@@ -112,6 +120,7 @@ way.
 | [Oscar64](https://github.com/drmortalwombat/oscar64) | C cross-compiler targeting 6502/C64 | build from source, see their README |
 | `wput` | FTP deploy to the Ultimate device | `sudo apt install wput` |
 | `pandoc` + `texlive-xetex` | Generate `README.pdf` (optional) | `sudo apt install pandoc texlive-xetex` |
+| Python 3 | `make test` (optional) | usually preinstalled |
 
 ### Deploy setup
 
@@ -127,6 +136,9 @@ cp .env.example .env
 |---|---|
 | `make` / `make all` | Compile to `build/mandelupic.prg`, regenerate `README.pdf`, build the release ZIP |
 | `make deploy` | FTP the compiled `.prg` and matching `.cfg` to the Ultimate device set in `.env` |
+| `make test` | Build both PRGs and run the host-side tests in `tests/` (Python 3, standard library only) |
+| `make force48` | Build the test-only `build/mandelupic-force48.prg`, which always uses the 48 MHz display path (at 48 MHz), so that path can be checked on an Elite II / C64U |
+| `make deploy-force48` | FTP the force48 PRG (as `mandelupic-force48.prg`, with its own copy of the `.cfg`) next to the release one |
 | `make docs` | Regenerate `README.pdf` via pandoc |
 | `make clean` | Remove build outputs |
 

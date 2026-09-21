@@ -28,6 +28,107 @@ never drifts from the raster beam's own position.
 project (see `main.c`'s own comment on the global interrupt mask) so
 nothing can interrupt the cycle-exact timing mid-scanline.
 
+## CPU timing on the Ultimate 64
+
+In turbo mode the Ultimate 64 does not simply run the CPU from a
+faster clock. Each phi2 cycle offers as many CPU sub-slots as the
+board's top speed: 64 on Elite II / C64U, 48 on the original Ultimate
+64 / Elite I. The `$D031` speed index selects how many of them the CPU
+may use: all of them at the top index, one per phi2 at index 0
+(1 MHz). The VIC-II uses one sub-slot of every phi2 for its own memory
+access, so the CPU gets:
+
+| Board | Index 15 | CPU cycles per phi2 | Cycles per PAL line (63 phi2) |
+|---|---|---|---|
+| Elite II / C64U | 64 MHz | 63 | 3,969 |
+| U64 / Elite I | 48 MHz | 47 | 2,961 |
+
+A line is 504 dots. A `$D020` write shows up at the next dot boundary.
+
+`render_frame()`'s per-line `sta $d031 (#$80)` / `stx $d031 (#$8f)`
+drops to index 0 for the `stx`'s last three cycles. Each of those
+finishes at the end of a phi2 cycle, so turbo resumes at the start of
+phi2 cycle 4 of every line, whatever the polling jitter was. The next
+line's `lda $d012` must finish before the line ends; a VIC register
+read costs one extra sub-slot. At 64 MHz that leaves 60 x 63 = 3,780
+cycles, and the loop uses 3,778 of them with the delay value `$87`.
+That 2-sub-slot margin is consistent with the hardware bisection in
+`render_frame()`'s comment, where the next value tried, `$A5`, skews.
+
+## 48 MHz path (original Ultimate 64 / Elite I)
+
+At 48 MHz the unchanged line needs 192 x 16 = 3,072 cycles of pixel
+writes alone, against 2,961 cycles in a whole line, so the full
+horizontal resolution cannot be shown. The 48 MHz path shows each
+packed byte's low nibble (the even pixel) as one pixel about 2 dots
+wide.
+
+At startup `upic_select_display_path()` measures the speed and, on a
+48 MHz machine, patches `render_line_pixels()` in place, keeping its
+12-byte stride per byte column:
+
+| Bytes | 64 MHz (as built) | Cycles | 48 MHz (patched) | Cycles |
+|---|---|---|---|---|
+| 0-2 | `ldx col,y` | 4 | `lda col,y` | 4 |
+| 3-5 | `stx $d020` | 4 | `sta $d020,x` (X = 0) | 5 |
+| 6-8 | `lda nybbles,x` | 4 | `jmp` next column | 3 |
+| 9-11 | `sta $d020` | 4 | (skipped) | |
+
+That gives one border-colour write every 12 cycles, 2,304 cycles per
+line. `sta abs,x` and `jmp` are used because their cycle counts are
+fixed, independent of data and of where the column lands in memory.
+Because 47 cycles per phi2 don't divide evenly into 12-cycle steps,
+about one pixel in 24 is 3 dots wide instead of 2. The 64 MHz path has
+the same effect: about one pixel in 64 is 2 dots wide instead of 1.
+
+The delay before the first pixel (`render_frame.dly`) is patched from
+135 loop passes to `UPIC_DELAY_48` = 96. With 5 cycles per pass the line
+then uses 5 x 96 + 2,335 = 2,815 of its 2,820 cycles after the resync,
+leaving 5 sub-slots to spare, against 2 for the 64 MHz path. 97 would
+leave 0, and 98 does not fit. With 96 the 48 MHz picture starts 3 dots
+left of the 64 MHz picture and ends 1 dot short of it. The picture
+buffer, the generator and `zoom.c` are unchanged. The corner markers
+are 2x2 pixels, so each always covers one even pixel and stays
+visible.
+
+### Speed probe
+
+`upic_select_display_path()` times a fixed 64,764-cycle loop against
+`$D012`, which advances once per real PAL line at any CPU speed:
+16.3 lines at 64 MHz (`$D012` ends at `$30`), 21.9 lines at 48 MHz
+(`$35`). Every loop-back is an absolute `jmp`, so the cycle count does
+not depend on where the linker places the function.
+
+The Ultimate 64 runs the CPU at 1 MHz for a few seconds after every
+CPU reset, whatever `$D031` says, and briefly after IEC bus activity.
+When the program is started from the Ultimate menu the probe runs
+inside the first of those windows. A whole loop at 1 MHz
+spans 1,028 lines and always ends at `$7C`, which is rejected as
+invalid. A loop during which the window ends can end on any line, so
+a result is only accepted once two loops in a row give the same
+answer. The 48 MHz answer patches the renderer; the 64 MHz answer
+changes nothing.
+
+### Checking the 48 MHz path on a 64 MHz machine
+
+`make force48` builds a test-only PRG that skips the probe, always
+patches the renderer, and also patches the per-line turbo byte
+(`render_frame.trb`) from `$8F` to `$8E`. Index 14 is 48 MHz on Elite
+II / C64U. How its 48 cycles per phi2 are spread within each phi2 may
+differ from a U64's top speed, so this build checks the 48 MHz path
+closely but not identically. On an original Ultimate 64
+the release PRG keeps `$8F`, since index 15 is already 48 MHz there.
+
+### Status
+
+The patch, the line budget, the probe and its forced-1 MHz handling
+are checked by `make test` (`tests/`), which runs the compiled code
+against a model of the timing behaviour above. The model reproduces
+the `$87` / `$A5` hardware bisection. None of the 48 MHz behaviour has
+been seen on real hardware yet. The picture's appearance, in
+particular whether its left edge (3 dots further left than the 64 MHz
+picture's) is still inside the visible area, needs a real screen.
+
 ## Picture buffer: split across two locations
 
 The picture is 384x256 pixels, 2 pixels packed per byte (low nibble =
@@ -83,7 +184,7 @@ call) and placed in the otherwise-idle `ovl1` overlay region
 | Region | Range | Contents |
 |---|---|---|
 | `startup` | `$0801`-`$0853` | BASIC stub + Oscar64 startup code |
-| `main` | `$0853`-`$1800` | Default code/data/bss/heap/stack -- `mandelbrot_generate()`, UCI functions, `main()` itself, `zoom_out_view()` |
+| `main` | `$0853`-`$1800` | Default code/data/bss/heap/stack -- `mandelbrot_generate()`, UCI functions, `main()` itself, `zoom_out_view()`, `upic_select_display_path()`. 0 bytes free: BSS ends exactly where the stack section starts (`$17B8`) |
 | `ovl1` | `$0200`-`$0800` | `nybbles[]` lookup table (permanently, not used as a swappable overlay in this project) |
 | `upic_buffer` | `$1800`-`$D000` | Picture buffer, columns 8-191 |
 | `upic_buffer_reloc` (`picreloc`) | `$E000`-`$E800` | Picture buffer, columns 0-7 |
@@ -96,7 +197,13 @@ usage and the silent-linker-wraparound risk near its `$10000` boundary.
 
 ## Testing
 
-No emulator automation exists for this platform -- VICE specifically
-doesn't emulate the Ultimate's own UCI/turbo hardware this project
-depends on. Manual/visual testing on real Ultimate 64 hardware is the
-only way to confirm any change affecting the display.
+VICE doesn't emulate the Ultimate's own UCI/turbo hardware this
+project depends on, so manual/visual testing on real Ultimate 64
+hardware is the only way to confirm how the picture actually looks.
+
+`make test` covers the timing that can be checked without a screen:
+it runs the compiled `render_frame()`/`render_line_pixels()` for a
+full frame at 64 MHz and (patched) at 48 MHz and checks that every row
+stays inside one raster line, rows land on consecutive lines, the
+pixel pitch is 1 or 2 dots, and both paths have the same left and
+right picture edges. See `tests/README.md`.

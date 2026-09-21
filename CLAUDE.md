@@ -5,8 +5,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project
 
 **Mandelbrot Upic** — a Commodore 64 Ultimate demo that generates a
-Mandelbrot fractal on-device at 64 MHz turbo, packs it directly into
-Upic format (a 16-color, 384x256 border-color raster picture
+Mandelbrot fractal on-device at 64 MHz turbo (48 MHz with half
+horizontal display resolution on an original Ultimate 64 / Elite I,
+auto-detected at startup -- see `docs/UPIC_VIEWER.md`'s 48 MHz
+section), packs it directly into Upic format (a 16-color, 384x256 border-color raster picture
 technique), displays it live as it renders, and lets the user
 interactively pan and zoom into any region of the result. Targets
 **Ultimate firmware 3.15 or newer only** (no fallback path for older
@@ -32,6 +34,10 @@ behavior.
 - `make deploy` — FTP the compiled `.prg` to the Ultimate device set in
   `.env` (copy from `.env.example`, sets `ULTIP1`)
 - `make docs` — regenerates `README.pdf` via pandoc
+- `make test` — builds the release and `force48` PRGs and runs the
+  host-side tests in `tests/` (Python 3 standard library only)
+- `make force48` — test-only PRG that always uses the 48 MHz display
+  path, for checking it on an Elite II / C64U
 
 ## Firmware 3.15+ features this demo is built around
 
@@ -62,6 +68,22 @@ build's own `.map` file after changing anything in this pool -- a
 clean build alone is not sufficient evidence of correct placement this
 close to the boundary.
 
+The default `main` region (`$0853`-`$1800`) has 0 bytes free since the
+48 MHz support was added: BSS ends exactly at the stack section
+(`$17B8`), and `stacksize` was cut from 80 to 72 (the compiler's minimum
+is 68). Anything new there needs an equal saving elsewhere; the linker
+reports "Cannot place stack section" when it overflows.
+
+Turbo CPU timing (sub-slots per phi2, the VIC's share, the 1 MHz
+window after reset) is summarised in `docs/UPIC_VIEWER.md` and
+implemented in `tests/machine.py`; read those before reasoning about
+cycle budgets.
+
+`render_frame()` is a named `__asm` block so `upic_select_display_path()` can
+patch its `dly`/`trb` operands by label. `tests/test_turbo_modes.py`
+asserts those operands' offsets and that its delay loop doesn't cross
+a page, so keep those tests passing after touching it.
+
 Interrupts are masked globally for the program's entire lifetime (see
 `main.c`'s own comment) -- this program has no functional need for a
 real interrupt, and this avoids a real class of bug where a same-tick
@@ -70,10 +92,15 @@ this program's own direct-CIA keyboard polling is active.
 
 ## Testing
 
-No emulator automation exists for this platform -- VICE specifically
+No emulator automation exists for the whole program -- VICE specifically
 doesn't emulate the Ultimate's own UCI/turbo hardware this project
 depends on. Manual/visual testing on real Ultimate 64 hardware is the
 way to confirm any graphics- or control-affecting change.
+
+`make test` runs host-side unit tests (`tests/`): the compiled
+renderer, 48 MHz patcher and speed probe run in a small cycle-counting
+6502 emulator against a model of the U64's turbo CPU timing. Run it after any
+change to `upic_viewer.c`, `turbo.c` or region layout.
 
 ## Code conventions
 

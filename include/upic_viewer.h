@@ -127,6 +127,17 @@ char upic_show_frame(void);
 // else on screen.
 void upic_restore_display(void);
 
+// Measure the turbo ceiling and pick the display path. On an Elite II
+// / C64U (64 MHz at speed index 15) this changes nothing. On an
+// original Ultimate 64 / Elite I (48 MHz at index 15) it patches the
+// renderer to its 48 MHz path: same screen area, half the horizontal
+// resolution (each packed byte's even pixel, about 2 dots wide).
+// Call once, after rombank_out() and turbo_fast(), with interrupts
+// masked, before the first upic_show_frame(). PAL only. Built with
+// UPIC_FORCE_48MHZ (`make force48`) it skips the measurement and
+// always takes the 48 MHz path at index 14. See upic_viewer.c.
+void upic_select_display_path(void);
+
 #pragma compile("upic_viewer.c")
 
 #endif
