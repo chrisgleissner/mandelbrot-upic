@@ -1,0 +1,1 @@
+Screenshots for https://github.com/xahmol/mandelbrot-upic/pull/2, captured from the VIC video stream of an Ultimate 64 Elite (48 MHz) and a C64 Ultimate (64 MHz) and scaled up with nearest-neighbour sampling. Not part of the PR's code.
