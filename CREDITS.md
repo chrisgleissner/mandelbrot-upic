@@ -3,8 +3,9 @@
 ## Upic picture-viewer technique
 
 Border-color raster picture technique by **Aleksi Eeben**
-(aleksi.eeben@me.com) -- see `Source/upic.s` in the original Upic
-package, https://csdb.dk/release/?id=263980. Ported to Oscar64/C for
+(aleksi.eeben@me.com) -- see `Source/upic.s` in the Upic Image
+Converter package, https://csdb.dk/release/?id=263980 (the original
+Upic release is https://csdb.dk/release/?id=263889). Ported to Oscar64/C for
 the Ultimate 64 by Xander Mol; `include/upic_viewer.c`/`upic_viewer.h`
 and `include/rombank.c`/`rombank.h` implement this port, including a
 picture-buffer relocation (part of the picture data moved to `$E000`,

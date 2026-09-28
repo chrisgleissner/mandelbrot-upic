@@ -7,33 +7,70 @@ and original Ultimate 64 / Elite I (48 MHz).
 
 - At startup, `upic_select_display_path()` (`upic_viewer.c`) times a
   fixed 64,764-cycle loop against the VIC-II raster counter: 16.3 PAL
-  lines at 64 MHz, 21.9 at 48 MHz. It retries while the FPGA's forced
-  1 MHz mode (a few seconds after every reset) is still active, and only
-  accepts a result that two loops in a row agree on.
-- On a 48 MHz machine it patches the Upic line renderer in place to
-  show each packed byte's even pixel as one pixel about 2 dots wide
-  (12 cycles per byte column instead of 16 for two pixels), and
-  shortens the render delay from 135 to 96 loop passes. The line then
-  has 5 CPU sub-slots to spare, against 2 for the 64 MHz path. The
-  picture starts 3 dots further left and ends 1 dot short of the 64 MHz
-  picture. On a 64 MHz machine nothing is patched and the render code
-  runs as in v1.0.3.
+  lines at 64 MHz, 21.9 at 48 MHz. It retries while the forced 1 MHz
+  mode (a few seconds after every reset) is still active, and only
+  accepts a result that two loops in a row agree on. Each retry writes
+  the turbo speed register again, so a speed setting that was reset
+  after `turbo_fast()` is restored. If no result is accepted within 256
+  loops (about 20 s at 1 MHz, for example when the program is started
+  without its `.cfg`), the probe gives up and keeps the 64 MHz path
+  instead of waiting forever with a black screen.
+- On a 48 MHz machine it rebuilds the Upic line renderer in place to
+  show pixels 4m, 4m+2 and 4m+3 of every 4, 8 cycles each: 288 of the
+  384 pixels per line, about 1.36 dots wide. Each pair of byte columns
+  A, B becomes `lda A,y / sta $d020 / ldx B,y / stx $d020 /
+  lda nybbles,x / sta $d020`, with no indexed access to I/O space.
+  94 of the 96 pairs are drawn; the last two would fall outside the
+  visible area. The render delay changes from 135 to 99 loop passes,
+  which leaves 38 cycles of the line to spare. Measured on an Ultimate
+  64 Elite against a C64 Ultimate, every shown pixel is within 1.5 dots
+  of where the 64 MHz path shows the same pixel, and the picture starts
+  1 dot further left. On a 64 MHz machine nothing is patched and the
+  render code runs as in v1.0.3.
+- Live frames during generation are paced by work done instead of one
+  per column: one frame per column on the 64 MHz path, as before, and
+  one per 3/4 column on the 48 MHz path (`upic_frame_quarters`). A
+  column takes about 1.34 times as long at 48 MHz; with this pacing an
+  Ultimate 64 Elite and a C64 Ultimate both show the picture in 26% of
+  frames during generation.
+- Fixed a start-up hang in the UCI library (`ultimate_common_lib.c`,
+  inherited from the upstream library): the program stopped with a
+  black screen before the first picture in 6 of 15 starts on an
+  Ultimate 64 Elite and 1 of 15 on a C64 Ultimate. The firmware 3.15
+  unlock is now only sent when the UCI isn't already mapped, the
+  write-only control register is assigned instead of read-modified,
+  the ERROR check tests bit 3 instead of bit 2, `uii_sendcommand()`
+  waits until the command has been taken, and the wait for idle
+  releases an orphaned reply. After the fix no start hung in 30 starts
+  on the Ultimate 64 Elite and 20 on the C64 Ultimate. See
+  `UCILIBMANUAL.md`.
 - `make force48` builds a test-only PRG that always takes the 48 MHz
   path at speed index 14 (48 MHz on Elite II / C64U), so the path can
   be checked on a 64 MHz machine.
 - New host-side tests (`make test`, `tests/`): a cycle-counting 6502
   emulator runs the compiled renderer, patcher and probe from both
-  PRGs against a model of the U64's turbo CPU timing. The model
-  reproduces the hardware-bisected render delay (`$87` fits, `$A5`
-  skews).
+  PRGs against a model of the U64's turbo CPU timing. The emulator
+  models the dummy read of an indexed store, which costs a wait state
+  when it reads a VIC register. The model reproduces the
+  hardware-bisected render delay at 64 MHz (`$87` fits, `$A5` skews)
+  and the pixel positions measured at 48 MHz. The tests also check the
+  committed end-to-end golden images for consistency.
+- New end-to-end test on real hardware (`make e2e`, `tests/e2e/`): runs
+  the release PRG on one or more Ultimate devices, drives it with key
+  presses over the REST API, captures the picture from the VIC video
+  stream and compares it with golden images for each display path.
+  With one 48 MHz and one 64 MHz device it also checks that both show
+  the same picture.
 - `turbo.h`: corrected the `TURBO_SPEED_*` names for indexes 6-13 to
   the firmware's actual speed table, and documented that the table
   differs on an original Ultimate 64 / Elite I (index 14 = 40 MHz,
   index 15 = 48 MHz there).
-- The default `main` code region now has 0 bytes free, and
-  `stacksize` went from 80 to 72 (the compiler-checked minimum is 68).
-  A startup key to force the 48 MHz path did not fit, which is why
-  that is a separate build.
+- `mandelbrot_generate()`'s symmetry check uses an unsigned 16-bit
+  shift instead of a 32-bit division, which was the only use of
+  Oscar64's 32-bit division runtime. Without this change the 48 MHz
+  code does not fit the default `main` code region at `stacksize` 80.
+  The change frees about 400 bytes there: `stacksize` stays at 80 and
+  the region has 323 bytes free.
 
 ## [1.0.3]
 

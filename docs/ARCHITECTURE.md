@@ -18,9 +18,12 @@ own attribution.
    color palette.
 3. Enable turbo at speed index 15 (64 MHz on Elite II / C64U, 48 MHz
    on an original Ultimate 64 / Elite I). `upic_select_display_path()`
-   measures which of the two it is and, on a 48 MHz machine, switches
-   the renderer to its half-horizontal-resolution path (see
-   `docs/UPIC_VIEWER.md`).
+   measures which of the two it is and, on a 48 MHz machine, rebuilds
+   the renderer as its 48 MHz path, which shows 3 of every 4 pixels
+   (288 of 384 per line) at the same screen position (see
+   `docs/UPIC_VIEWER.md`). If the measurement never succeeds (turbo
+   stays off), it gives up after 256 probe loops (about 20 s at 1 MHz)
+   and keeps the 64 MHz path.
 4. Generate the fractal (`mandelbrot_generate()`), showing it live as
    it builds.
 5. Loop forever: let the user browse/zoom/cycle the palette
@@ -75,12 +78,20 @@ verified-not-assumed object placement near its `$10000` boundary.
 
 No emulator automation exists for the whole program -- VICE doesn't
 emulate the Ultimate's own UCI/turbo hardware this project depends on.
-Manual/visual testing on real Ultimate 64 hardware is the only way to
-confirm any change affecting the display or controls.
+Changes affecting the display or controls have to be confirmed on real
+Ultimate hardware.
 
 `make test` runs host-side tests (`tests/`, see `tests/README.md`) that
 execute the compiled renderer, the 48 MHz patcher and the speed probe
 in a cycle-counting 6502 emulator attached to a model of the U64's
 turbo CPU timing.
 They check instruction timing and patch contents, not the picture on
-a real screen.
+a real screen. They also check that the committed end-to-end golden
+images are consistent with each other.
+
+`make e2e` runs the end-to-end test in `tests/e2e/` (see
+`tests/e2e/README.md`) on real devices: it starts the release PRG
+over the Ultimate's REST API, drives it with key presses, captures
+the picture from the VIC video stream and compares it with golden
+images for the device's display path. With one 48 MHz and one 64 MHz
+device it also checks that both show the same picture.

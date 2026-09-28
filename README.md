@@ -10,11 +10,12 @@ into any region of the result.
 
 The same PRG also runs on an original Ultimate 64 or Ultimate 64 Elite
 (48 MHz turbo maximum). It measures the CPU speed at startup and, on a
-48 MHz machine, shows the picture at half horizontal resolution (192
-pixels per line, each about 2 dots wide) at nearly the same size and
-screen position. The 48 MHz path has so far only been checked by the
-host-side tests (see [Make targets](#make-targets)), not yet on real
-hardware.
+48 MHz machine, shows 288 of the 384 pixels per line (3 of every 4,
+each about 1.36 dots wide) at the same size and screen position: every
+shown pixel is within 1.5 dots of where a 64 MHz machine shows it. The
+48 MHz path has been checked on an Ultimate 64 Elite, against a C64
+Ultimate running the same PRG (see `make e2e` under
+[Make targets](#make-targets)).
 
 See `CREDITS.md` for full attribution.
 
@@ -111,6 +112,14 @@ registers this demo needs (for an Ultimate 64 Elite 2 board); if your
 own configuration already has both enabled, this has no effect either
 way.
 
+Known open point: the `.cfg` sets `Turbo Control` to `U64 Turbo
+Registers`. On a C64 Ultimate (firmware 1.2RC) that value is named
+`C64U Turbo Registers`, and the Ultimate's REST API rejects `U64 Turbo
+Registers` there. Whether the automatic `.cfg` load also skips the
+setting has not been checked. If the demo does not run at turbo speed
+on a C64 Ultimate, set `Turbo Control` to `C64U Turbo Registers` in
+the Ultimate menu.
+
 ## Building from source
 
 ### Prerequisites
@@ -120,12 +129,13 @@ way.
 | [Oscar64](https://github.com/drmortalwombat/oscar64) | C cross-compiler targeting 6502/C64 | build from source, see their README |
 | `wput` | FTP deploy to the Ultimate device | `sudo apt install wput` |
 | `pandoc` + `texlive-xetex` | Generate `README.pdf` (optional) | `sudo apt install pandoc texlive-xetex` |
-| Python 3 | `make test` (optional) | usually preinstalled |
+| Python 3 | `make test`, `make e2e` (optional) | usually preinstalled |
 
 ### Deploy setup
 
 Copy `.env.example` to `.env` and set `ULTIP1` to your Ultimate
-device's IP address:
+device's IP address (and, for `make e2e`, `E2E_DEVICES` to the devices
+to test on):
 ```
 cp .env.example .env
 ```
@@ -139,6 +149,8 @@ cp .env.example .env
 | `make test` | Build both PRGs and run the host-side tests in `tests/` (Python 3, standard library only) |
 | `make force48` | Build the test-only `build/mandelupic-force48.prg`, which always uses the 48 MHz display path (at 48 MHz), so that path can be checked on an Elite II / C64U |
 | `make deploy-force48` | FTP the force48 PRG (as `mandelupic-force48.prg`, with its own copy of the `.cfg`) next to the release one |
+| `make e2e` | Run the release PRG on the real devices listed in `E2E_DEVICES` in `.env`, drive it with key presses over the REST API, and compare the VIC video stream with the golden images in `tests/e2e/golden/` (see `tests/e2e/README.md`) |
+| `make e2e-update` | Same run, but write the captures as the new golden images for each device's display path |
 | `make docs` | Regenerate `README.pdf` via pandoc |
 | `make clean` | Remove build outputs |
 

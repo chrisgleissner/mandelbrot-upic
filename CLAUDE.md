@@ -5,8 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project
 
 **Mandelbrot Upic** — a Commodore 64 Ultimate demo that generates a
-Mandelbrot fractal on-device at 64 MHz turbo (48 MHz with half
-horizontal display resolution on an original Ultimate 64 / Elite I,
+Mandelbrot fractal on-device at 64 MHz turbo (48 MHz on an original
+Ultimate 64 / Elite I, where the display shows 3 of every 4 pixels,
 auto-detected at startup -- see `docs/UPIC_VIEWER.md`'s 48 MHz
 section), packs it directly into Upic format (a 16-color, 384x256 border-color raster picture
 technique), displays it live as it renders, and lets the user
@@ -38,14 +38,21 @@ behavior.
   host-side tests in `tests/` (Python 3 standard library only)
 - `make force48` — test-only PRG that always uses the 48 MHz display
   path, for checking it on an Elite II / C64U
+- `make e2e` / `make e2e-update` — end-to-end test on the real devices
+  in `.env`'s `E2E_DEVICES`: compares (or rewrites) the golden images
+  in `tests/e2e/golden/`. Resets the devices it runs on. See
+  `tests/e2e/README.md`
 
 ## Firmware 3.15+ features this demo is built around
 
 - **UCI cartridge-side auto-enable**: `uii_wait_for_uci()` in
-  `include/ultimate_common_lib.c` — no need for the user to turn on
-  "Command Interface" in the Ultimate menu first (though
-  `config/MandelbrotUpic-U64E2.cfg` enables it anyway, alongside U64
-  turbo registers).
+  `include/ultimate_common_lib.c` sends the unlock sequence when the
+  UCI isn't already mapped (sending it while the UCI is mapped caused
+  a start-up hang -- see `UCILIBMANUAL.md`). On an Ultimate 64 Elite
+  (firmware 3.15) the unlock did not bring the UCI up with "Command
+  Interface" disabled, so the palette is not pushed there;
+  `config/MandelbrotUpic-U64E2.cfg` enables the interface, alongside
+  U64 turbo registers.
 - **Palette control**: `uii_getpalette()`/`uii_setpalette()`/
   `uii_setpalettecolor()`/`uii_resetpalette()`, wrapping UCI control
   commands `$51`-`$54` (`GET_PALETTE`/`SET_PALETTE`/
@@ -68,10 +75,13 @@ build's own `.map` file after changing anything in this pool -- a
 clean build alone is not sufficient evidence of correct placement this
 close to the boundary.
 
-The default `main` region (`$0853`-`$1800`) has 0 bytes free since the
-48 MHz support was added: BSS ends exactly at the stack section
-(`$17B8`), and `stacksize` was cut from 80 to 72 (the compiler's minimum
-is 68). Anything new there needs an equal saving elsewhere; the linker
+The default `main` region (`$0853`-`$1800`) has 323 bytes free in the
+current build: BSS ends at `$166D` and the stack section starts at
+`$17B0`, with `stacksize` 80 (the compiler's minimum is 68). It had 0
+bytes free, with `stacksize` cut to 72, until `mandelbrot_generate()`'s
+symmetry check stopped linking Oscar64's 32-bit division runtime
+(about 310 bytes). A 32-bit division anywhere in the program links
+that runtime back in. Check the `.map` after adding anything there; the linker
 reports "Cannot place stack section" when it overflows.
 
 Turbo CPU timing (sub-slots per phi2, the VIC's share, the 1 MHz
@@ -94,12 +104,15 @@ this program's own direct-CIA keyboard polling is active.
 
 No emulator automation exists for the whole program -- VICE specifically
 doesn't emulate the Ultimate's own UCI/turbo hardware this project
-depends on. Manual/visual testing on real Ultimate 64 hardware is the
-way to confirm any graphics- or control-affecting change.
+depends on. Graphics- or control-affecting changes have to be
+confirmed on real Ultimate hardware: by eye, or with `make e2e`
+(`tests/e2e/`), which captures the picture from the VIC video stream
+and compares it with golden images.
 
 `make test` runs host-side unit tests (`tests/`): the compiled
 renderer, 48 MHz patcher and speed probe run in a small cycle-counting
-6502 emulator against a model of the U64's turbo CPU timing. Run it after any
+6502 emulator against a model of the U64's turbo CPU timing, and the
+committed e2e goldens are checked for consistency. Run it after any
 change to `upic_viewer.c`, `turbo.c` or region layout.
 
 ## Code conventions

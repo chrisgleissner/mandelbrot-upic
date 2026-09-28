@@ -116,7 +116,7 @@ ZIPFILE  = build/$(MAIN)-$(VERSION).zip
 README   = README.pdf
 
 .SUFFIXES:
-.PHONY: all clean deploy check-deploy zip docs force48 test deploy-force48
+.PHONY: all clean deploy check-deploy zip docs force48 test deploy-force48 e2e e2e-update
 
 all: $(TARGET) $(README) zip
 
@@ -135,6 +135,20 @@ $(FORCE48): $(ALLSRCS)
 # against a raster-line model at 48 and 64 MHz. See tests/README.md.
 test: $(TARGET) $(FORCE48)
 	python3 -m unittest discover -s tests -v
+
+# End-to-end test on real hardware (tests/e2e/README.md): runs the release
+# PRG on every device in E2E_DEVICES (set in .env, host names or IPs),
+# steers it with keyboard input over REST, and compares the VIC video
+# stream with the golden images in tests/e2e/golden/. e2e-update rewrites
+# the goldens of the devices' display paths instead.
+E2E_DEVICES ?=
+E2E_ARGS = $(foreach d,$(E2E_DEVICES),--device $(d))
+
+e2e: $(TARGET)
+	python3 tests/e2e/run_e2e.py $(E2E_ARGS)
+
+e2e-update: $(TARGET)
+	python3 tests/e2e/run_e2e.py --update $(E2E_ARGS)
 
 clean:
 	$(DEL) build/*.prg 2>$(NULLDEV) ; true
