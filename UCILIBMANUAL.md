@@ -70,26 +70,34 @@ The UCI exposes four registers mapped at `$DF1C–$DF1F`. The same two addresses
 
 ### Status Register Bit Definitions
 
-| Bit | Mask | Meaning when set |
-|-----|------|-----------------|
-| 0 | `0x01` | Acknowledge active |
-| 1 | `0x02` | Acknowledge cleared (ACK done) |
-| 2 | `0x04` | Error flag |
-| 4 | `0x10` | Command busy |
-| 5 | `0x20` | Command accepted / idle |
-| 6 | `0x40` | Status data available in `statusdata` FIFO |
-| 7 | `0x80` | Response data available in `respdata` FIFO |
+Bit names as in the Ultimate's official command interface documentation. Before 2026-09-28 this table listed bit 2 as the error flag and gave wrong meanings for bits 0, 1, 4 and 5. `uii_sendcommand()` tested the same wrong error bit; see [Start-up hang fixed 2026-09-28](#start-up-hang-fixed-2026-09-28).
 
-Bits 4 and 5 together indicate state: both clear = idle, bit 5 set only = busy.
+| Bit | Mask | Name | Meaning when set |
+|-----|------|------|-----------------|
+| 0 | `0x01` | `CMD_BUSY` | A pushed command has not yet been taken by the Ultimate |
+| 1 | `0x02` | `DATA_ACC` | A `DATA_ACC` written to the control register has not yet been processed |
+| 2 | `0x04` | `ABORT_P` | An abort is pending |
+| 3 | `0x08` | `ERROR` | A command was pushed while the interface was not idle; cleared with `CLR_ERR` |
+| 4-5 | `0x30` | `STATE` | Two-bit state, see below |
+| 6 | `0x40` | `STAT_AV` | Status data available in `statusdata` FIFO |
+| 7 | `0x80` | `DATA_AV` | Response data available in `respdata` FIFO |
+
+`STATE` (bits 5-4): `00` idle, `01` command busy, `10` data last (the reply's last packet is available), `11` data more (more packets follow).
 
 ### Control Register Bit Definitions
 
-| Bit | Mask | Action when written |
-|-----|------|---------------------|
-| 0 | `0x01` | `PUSH_CMD` — push the command packet and execute |
-| 1 | `0x02` | `ACK` — acknowledge response and release UCI |
-| 2 | `0x04` | `ABORT` — abort the current operation |
-| 3 | `0x08` | `CLR_ERROR` — clear the error flag |
+| Bit | Mask | Name | Action when written |
+|-----|------|------|---------------------|
+| 0 | `0x01` | `PUSH_CMD` | Push the command packet written to `cmddata` and execute it |
+| 1 | `0x02` | `DATA_ACC` | Acknowledge the current reply packet and release it |
+| 2 | `0x04` | `ABORT` | Abort the current command |
+| 3 | `0x08` | `CLR_ERR` | Clear the `ERROR` status bit |
+| 4 | `0x10` | — | Reserved |
+| 5 | `0x20` | `IRQ` | Not used by this library |
+| 6 | `0x40` | `TRIGGER` | Not used by this library |
+| 7 | `0x80` | `DMA` | Not used by this library |
+
+The control register is write-only and shares its address with the status register. Always assign it (`uii_reg_write.control = 0x01;`), never modify it with `|=`: a read-modify-write reads the status register and writes its bits back as control bits. For example, a pending abort (status bit 2) would be written back as `ABORT`, and a data state (status bit 5) as `IRQ`.
 
 ### Queue Sizes
 
@@ -108,6 +116,8 @@ The `DATA_QUEUE_SZ` constant is set conservatively to 512 to limit RAM usage. Th
 | `uci_unlock2` | `$D036` | `0xCD` |
 
 Writing `0xAB` to `$D038` then `0xCD` to `$D036`, in that order, enables the UCI I/O mapping from the cartridge itself on firmware 3.15+, without needing "Command Interface" turned on beforehand in the Ultimate's own menu. **Not present in the official Register API PDF as of this writing** — confirmed directly by Gideon Zweijtzer and verified empirically against real Ultimate 64-II hardware (a single write to `$D038` alone, matching the visible `U64Config::unlock_irq()` handler in the firmware source, does **not** work — both writes are required). Harmless on older firmware/bitstreams: nothing else in this project uses `$D030`–`$D03F`, and if the unlock isn't implemented, the writes are simply ignored and `uii_detect()` keeps failing exactly as before. See `uii_enable()` / `uii_wait_for_uci()` in §7.
+
+Two observations from 2026-09-28 limit this. First, when the UCI is already mapped, the unlock makes the firmware re-enable the interface and leaves its `ABORT_P` flag pending, which contributed to a start-up hang; `uii_wait_for_uci()` therefore only sends the unlock when `uii_detect()` fails (see [Start-up hang fixed 2026-09-28](#start-up-hang-fixed-2026-09-28)). Second, on an Ultimate 64 Elite (firmware 3.15) with "Command Interface" disabled, the unlock did not bring the UCI up (the same with the library before this fix). The Mandelbrot Upic demo then starts without pushing its palette; its shipped `.cfg` enables the interface.
 
 ---
 
@@ -308,9 +318,11 @@ Every UCI operation follows the same four-step sequence. High-level functions in
 
 ```
 1. uii_sendcommand(cmd, length)
+      │  Waits for STATE idle (releasing an orphaned reply with DATA_ACC)
       │  Writes target ID + opcode + arguments to $DF1D
-      │  Waits for UCI idle, then sets PUSH_CMD bit in control register
-      └─ Retries if error bit is set
+      │  Writes PUSH_CMD to the control register
+      │  Retries if ERROR (bit 3) is set, after writing CLR_ERR
+      └─ Waits until CMD_BUSY clears and STATE leaves "command busy"
 
 2. uii_readdata()              ← call only if command returns data
       │  Polls status register bit 7 (data available)
@@ -323,8 +335,8 @@ Every UCI operation follows the same four-step sequence. High-level functions in
       └─ Returns number of bytes read
 
 4. uii_accept()
-      │  Sets ACK bit in control register
-      └─ Waits for acknowledgement to clear
+      │  Writes DATA_ACC to the control register
+      └─ Waits until status bit 1 (DATA_ACC) clears
 ```
 
 **For streaming commands** (`uii_read_file`, `uii_get_dir`): the firmware returns data in multiple packets. After calling the command, drain data in a loop using `uii_isdataavailable()` / `uii_ismoredataavailable()` / `uii_readdata()` / `uii_accept()`:
@@ -338,6 +350,28 @@ while (uii_isdataavailable() || uii_ismoredataavailable())
     // process uii_data[0..bytes-1]
 }
 ```
+
+### Start-up hang fixed 2026-09-28
+
+The library as inherited from upstream could hang at program start. The Mandelbrot Upic demo stopped with a black screen before its first picture in 6 of 15 starts on an Ultimate 64 Elite (firmware 3.15) and in 1 of 15 on a C64 Ultimate (firmware 1.2RC). The sequence of events:
+
+1. `uii_wait_for_uci()` sent the firmware 3.15 unlock (`$D038`/`$D036`) even when the UCI was already mapped. The firmware then re-enables the command interface and leaves its `ABORT_P` flag pending.
+2. The palette command sent next could be answered after the handshake had already been reset to idle.
+3. `uii_sendcommand()` returned as soon as the command was pushed, without waiting for the Ultimate to take it. The caller read an empty status string, treated it as a failure and sent the command again while the first reply was still queued.
+4. The wait-for-idle loop at the start of `uii_sendcommand()` then spun forever: the state cannot return to idle while an unread reply is queued.
+5. The unread reply also made the next program start hang, because a C64 reset does not reset the UCI.
+
+The same code had two further defects. `uii_reg_write.control |= x` was a read-modify-write of the write-only control register, whose read value is the status register (see §2). The error check tested bit 2 (`ABORT_P`) instead of bit 3 (`ERROR`).
+
+Changes in `ultimate_common_lib.c`:
+
+- `uii_wait_for_uci()` sends the unlock only when `uii_detect()` fails.
+- The control register is always assigned, never modified with `|=` (`uii_sendcommand()`, `uii_accept()`, `uii_abort()`).
+- `uii_sendcommand()` tests `ERROR` in bit 3.
+- After `PUSH_CMD`, `uii_sendcommand()` waits until `CMD_BUSY` clears and `STATE` leaves "command busy", so the reply (or the idle state, for a command without a reply) is there when the caller reads it.
+- The wait for idle in `uii_sendcommand()` releases a reply that is still queued (a data state) by writing `DATA_ACC`. The library reads every reply right after sending its command, so a reply still queued at that point belongs to an earlier command.
+
+After the change no start hung: 0 of 30 starts on the Ultimate 64 Elite, 0 of 20 on the C64 Ultimate, and 0 of 20 on the Ultimate 64 Elite with "Command Interface" disabled.
 
 ---
 
@@ -442,7 +476,7 @@ void uii_enable(void);
 char uii_wait_for_uci(char timeout_seconds);
 ```
 
-**Purpose:** Send the firmware 3.15+ unlock sequence, then poll `uii_detect()` for up to `timeout_seconds` seconds (CIA1 TOD-based), so UCI comes up even on firmware where it wasn't enabled in the menu.
+**Purpose:** If `uii_detect()` fails, send the firmware 3.15+ unlock sequence; then poll `uii_detect()` for up to `timeout_seconds` seconds (CIA1 TOD-based), so UCI can come up on firmware where it wasn't enabled in the menu. The unlock is skipped when the UCI is already mapped, because sending it then leaves `ABORT_P` pending and contributed to a start-up hang (see §5, [Start-up hang fixed 2026-09-28](#start-up-hang-fixed-2026-09-28)). On an Ultimate 64 Elite (firmware 3.15) with "Command Interface" disabled, the unlock did not bring the UCI up (see §2).
 
 **Parameters:**
 
@@ -498,7 +532,7 @@ void uii_sendcommand(char *bytes, unsigned count);
 | `bytes` | Command buffer; `bytes[0]` will be set to `uii_target`, `bytes[1]` is the command opcode, remaining bytes are arguments |
 | `count` | Total number of bytes to send, including the target and opcode bytes |
 
-**Notes:** Waits for the UCI to be idle before sending. Retries if the error bit is set. This is the lowest-level send function; all higher-level functions call it internally.
+**Notes:** Waits for `STATE` idle before sending; a reply still queued from an earlier command is released with `DATA_ACC` instead of blocking the wait forever. After `PUSH_CMD` it checks `ERROR` (status bit 3): if set, it writes `CLR_ERR` and sends the command again. Otherwise it waits until `CMD_BUSY` clears and `STATE` leaves "command busy", so the reply is available when the caller reads it. See §5, [Start-up hang fixed 2026-09-28](#start-up-hang-fixed-2026-09-28), for why each of these steps is needed. This is the lowest-level send function; all higher-level functions call it internally.
 
 ---
 
@@ -510,7 +544,7 @@ void uii_accept(void);
 
 **Purpose:** Acknowledge completion of a UCI response and release the UCI for the next command. Must be called after draining all response data and status.
 
-**Notes:** Sets the ACK bit in the control register and waits for the UCI to clear it.
+**Notes:** Writes `DATA_ACC` (bit 1) to the control register and waits until status bit 1 (`DATA_ACC`) clears.
 
 ---
 
@@ -560,7 +594,7 @@ char uii_isdataavailable(void);
 char uii_ismoredataavailable(void);
 ```
 
-**Purpose:** Check whether the UCI has more data in a multi-packet transfer (status bits 4 and 5 both set).
+**Purpose:** Check whether the UCI has more data in a multi-packet transfer (status bits 4 and 5 both set: `STATE` = data more).
 
 **Returns:** `1` if more packets follow, `0` if this is the last packet.
 
@@ -586,7 +620,7 @@ char uii_isstatusdataavailable(void);
 void uii_abort(void);
 ```
 
-**Purpose:** Abort the current UCI operation by setting the ABORT bit in the control register.
+**Purpose:** Abort the current UCI operation by writing `ABORT` (bit 2) to the control register.
 
 **Notes:** Does not wait for confirmation. Use when an operation must be cancelled, or to reset the UCI to a known state.
 

@@ -106,7 +106,14 @@ char uii_wait_for_uci(char timeout_seconds)
 //	1 = detected
 //	0 = not detected, timed out
 {
-	uii_enable();
+	// Only unlock when the interface isn't mapped already (2026-09-28):
+	// the unlock makes the firmware re-enable the interface, which leaves
+	// its ABORT flag pending, and the first command sent while it is
+	// pending can be answered after the handshake was already reset to
+	// idle -- see uii_sendcommand(). With "Command Interface" enabled
+	// (this demo's .cfg does that) the unlock is not needed at all.
+	if (!uii_detect())
+		uii_enable();
 
 	cia1.tods = 0;
 	cia1.todt = 0;
@@ -305,46 +312,70 @@ void uii_sendcommand(char *bytes, unsigned count)
 // Input: bytes - the command bytes to send
 //        count - the number of bytes to send
 {
-	unsigned x = 0;
+	unsigned x;
 	char success = 0;
 
 	bytes[0] = uii_target;
 
+	// Status register ($DF1C read), per the Ultimate's command interface
+	// documentation: bit 0 CMD_BUSY (a pushed command not yet taken),
+	// bit 3 ERROR (a command was pushed while not idle), bits 4-5 STATE
+	// (00 idle, 01 command busy, 10 data last, 11 data more), bit 6/7
+	// status/response data available. The control register is write-only
+	// at the same address, so it is assigned, never `|=`: a read-modify-
+	// write would write the status bits back as control bits (bit 2 is
+	// ABORT, bit 5 IRQ, bits 6-7 TRIGGER/DMA). Fixed 2026-09-28 together
+	// with the ERROR bit (this tested bit 2, ABORT_P) and the wait after
+	// the push (this returned while the command was still pending, so
+	// the caller read an empty status and could push again while the
+	// first reply was queued -- a state that never returns to idle, so
+	// the wait below spun forever: seen on an Ultimate 64 Elite in about
+	// 2 of 5 program starts).
 	while (success == 0)
 	{
 		// Wait for idle state
 		uii_logtext("\nwaiting for cmd-busy to clear...");
 		uii_logstatusreg();
 
-		while (!(((uii_reg_read.status & 32) == 0) && ((uii_reg_read.status & 16) == 0)))
+		while (uii_reg_read.status & 0x30)
 		{
+			// A reply in a data state (bit 5) that nobody is reading --
+			// the library reads every reply right after sending, so a
+			// reply still queued here belongs to an earlier command
+			// (typically one answered after the caller already gave up
+			// on it, or one sent before a reset). Release it rather than
+			// wait forever for an idle state it would never reach.
+			if (uii_reg_read.status & 0x20)
+				uii_reg_write.control = 0x02;
 			uii_logtext("\nwaiting...");
 			uii_logstatusreg();
 		};
 
 		// Write char by char to data register
 		uii_logtext("\nwriting command...");
+		x = 0;
 		while (x < count)
 			uii_reg_write.cmddata = bytes[x++];
 
 		// Send PUSH_CMD
 		uii_logtext("\npushing command...");
-		uii_reg_write.control |= 0x01;
+		uii_reg_write.control = 0x01;
 
 		uii_logstatusreg();
 
 		// check ERROR bit.  If set, clear it via ctrl reg, and try again
-		if ((uii_reg_read.status & 4) == 4)
+		if (uii_reg_read.status & 0x08)
 		{
 			uii_logtext("\nerror was set. trying again");
-			uii_reg_write.control |= 0x08;
+			uii_reg_write.control = 0x08;
 		}
 		else
 		{
 			uii_logstatusreg();
 
-			// check for cmd busy
-			while (((uii_reg_read.status & 32) == 0) && ((uii_reg_read.status & 16) == 16))
+			// Wait until the Ultimate has taken the command and either
+			// answered (data states) or finished without a reply (idle).
+			while ((uii_reg_read.status & 0x01) || (uii_reg_read.status & 0x30) == 0x10)
 			{
 				uii_logtext("\nstate is busy");
 			}
@@ -361,7 +392,7 @@ void uii_accept(void)
 {
 	uii_logstatusreg();
 	uii_logtext("\nsending ack");
-	uii_reg_write.control |= 0x02;
+	uii_reg_write.control = 0x02;    // write-only register: see uii_sendcommand()
 	while (!(uii_reg_read.status & 2) == 0)
 	{
 		uii_logtext("\nwaiting for ack...");
@@ -409,7 +440,7 @@ void uii_abort(void)
 {
 	uii_logstatusreg();
 	uii_logtext("\nsending abort");
-	uii_reg_write.control |= 0x04;
+	uii_reg_write.control = 0x04;    // write-only register: see uii_sendcommand()
 }
 
 unsigned uii_readdata(void)
