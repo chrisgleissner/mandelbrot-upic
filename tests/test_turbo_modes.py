@@ -7,21 +7,30 @@ CPU timing (tests/machine.py). Build both first:
 `make test` does that.
 
 What is checked:
-- The model reproduces the hardware bisection recorded in
-  render_frame(): the released delay $87 fits a PAL line at 64 MHz,
-  $A5 does not.
+- The model reproduces two hardware bisections: at 64 MHz the released
+  delay $87 fits a PAL line and $A5 does not (render_frame()'s
+  comment); on an Ultimate 64 Elite the first 48 MHz layout
+  (`sta $d020,x`, 2026-09-21) fits with delay 56 and not with 57,
+  because of the indexed store's dummy read of $D020.
 - The release PRG's 64 MHz render code is the unmodified v1.0.3
   instruction layout, so Elite II / C64U behaviour is unchanged.
 - upic_select_display_path() leaves a 64 MHz machine untouched and
-  patches exactly the intended bytes on a 48 MHz one, including when
-  the FPGA's post-reset forced 1 MHz window is still running.
-- Rendering a full 256-row frame at 64 MHz and (patched) at 48 MHz:
+  rebuilds exactly the intended bytes on a 48 MHz one, including when
+  the post-reset forced 1 MHz window is still running, when the speed
+  register was reset after turbo_fast(), and when the probe gives up
+  on a machine that never leaves 1 MHz.
+- The 48 MHz path also sets upic_frame_quarters to 3, so a live frame
+  is shown every 3/4 column during generation (every column at 64 MHz).
+- Rendering a full 256-row frame at 64 MHz and (rebuilt) at 48 MHz:
   every row's pixels stay inside one raster line, rows land on
   consecutive lines, the next line's $D012 poll still finishes in time,
-  pixels are 1-2 dots (64 MHz) or 2-3 dots (48 MHz) wide, and the two
-  paths cover nearly the same dots.
-- A negative control: the unpatched 64 MHz code on a 48 MHz machine
-  does not fit, so the row checks can fail.
+  pixels are 1-2 dots wide, the 48 MHz path shows pixels 4m, 4m+2 and
+  4m+3 of every 4, and its delay centres each shown pixel on the dots
+  the 64 MHz path shows it on (within 1.5 dots, as measured on
+  hardware).
+- Negative controls: the unpatched 64 MHz code and the first 48 MHz
+  layout at its original delay (96) do not fit a line on a 48 MHz
+  machine, so the row checks can fail.
 """
 
 import unittest
@@ -39,7 +48,9 @@ LINE_OFFSET = 24           # `line: lda $d012`
 TRB_OFFSET = 34            # `trb: ldx #$8f`
 DLY_OFFSET = 42            # `dly: ldx #$87`
 DELAY_64 = 0x87
-DELAY_48 = 96              # UPIC_DELAY_48
+DELAY_48 = 99              # UPIC_DELAY_48
+GROUPS_48 = 94             # UPIC_GROUPS_48
+PIXELS_48 = 3 * GROUPS_48  # pixel writes per row on the 48 MHz path
 
 
 def column_page(c):
@@ -72,7 +83,7 @@ def render_frame(image, symbols, ratio, d031=0x8F):
     return m, pixels, line_reads
 
 
-def analyse(m, pixels, line_reads, per_row):
+def analyse(m, pixels, line_reads, per_row, constant_start=True):
     """Check row placement.
 
     Returns (first dot, end dot, pixel widths, slack sub-slots): dots are
@@ -105,10 +116,10 @@ def analyse(m, pixels, line_reads, per_row):
             if left < 0:
                 raise RowTimingError('row %d: next $D012 poll is late' % k)
             slack = left if slack is None else min(slack, left)
-    if len(firsts) != 1 or len(ends) != 1:
+    if constant_start and (len(firsts) != 1 or len(ends) != 1):
         raise RowTimingError('row start %s / end %s not constant'
                              % (sorted(firsts), sorted(ends)))
-    return firsts.pop(), ends.pop(), sorted(widths), slack
+    return min(firsts), max(ends), sorted(widths), slack
 
 
 def patched_image(image, symbols, dly):
@@ -125,27 +136,75 @@ def select(image, symbols, ratio, **kw):
 
 
 def expected_48mhz_patch(image, symbols, trb=0x8F):
+    """The render code the 48 MHz path must end up with, written out
+    instruction by instruction rather than by the patcher's own copy
+    rule, so a wrong copy cannot pass."""
     lo, hi = symbols['render_line_pixels']
     frame = symbols['render_frame'][0]
+    nyb = symbols['nybbles'][0]
     expected = bytearray(image)
+    code = bytearray()
+    for g in range(GROUPS_48):
+        a, b = column_page(2 * g), column_page(2 * g + 1)
+        code += bytes([0xB9, 0x00, a, 0x8D, 0x20, 0xD0,          # lda A,y / sta $d020
+                       0xBE, 0x00, b, 0x8E, 0x20, 0xD0,          # ldx B,y / stx $d020
+                       0xBD, nyb & 0xFF, nyb >> 8, 0x8D, 0x20, 0xD0])  # lda nyb,x / sta
+    code.append(0x60)                                            # rts
+    expected[lo:lo + len(code)] = code
+    expected[frame + DLY_OFFSET + 1] = DELAY_48
+    expected[frame + TRB_OFFSET + 1] = trb
+    # Live frames every 3/4 column instead of every column (upic_viewer.h).
+    expected[symbols['upic_frame_quarters'][0]] = 3
+    return expected
+
+
+def first_48mhz_layout(image, symbols, dly):
+    """The first 48 MHz layout (2026-09-21), which failed on hardware:
+    one pixel per byte column, `lda col,y / sta $d020,x / jmp next`,
+    with X = 0 left by render_frame's delay loop."""
+    lo, hi = symbols['render_line_pixels']
+    mem = bytearray(image)
     for c in range(COLUMNS):
         p = lo + 12 * c
         nxt = p + 12
-        expected[p] = 0xB9
-        expected[p + 3] = 0x9D
-        expected[p + 6:p + 9] = bytes([0x4C, nxt & 0xFF, nxt >> 8])
-    expected[frame + DLY_OFFSET + 1] = DELAY_48
-    expected[frame + TRB_OFFSET + 1] = trb
-    return expected
+        mem[p] = 0xB9
+        mem[p + 3] = 0x9D
+        mem[p + 6:p + 9] = bytes([0x4C, nxt & 0xFF, nxt >> 8])
+    mem[symbols['render_frame'][0] + DLY_OFFSET + 1] = dly
+    return mem
+
+
+def cycles_48mhz(cycles, ratio):
+    """Sub-slots taken by `cycles` CPU cycles at 48 MHz (47 cycles per
+    phi2 on both boards), for comparing with analyse()'s slack."""
+    return cycles * 8 * ratio // 47
+
+
+def row_dots(m, pixels, per_row, k=0):
+    """Dot (from the start of its raster line) of each pixel write in row k."""
+    row = pixels[k * per_row:(k + 1) * per_row]
+    line = m.line_of(row[0][0])
+    return [m.dot_of(t) - line * DOTS_PER_LINE for t, _ in row]
+
+
+def shown_48mhz(values_of_byte):
+    """Pixel values the 48 MHz path writes for one row: per pair of
+    byte columns A, B the low nibble of A, then both nibbles of B."""
+    out = []
+    for g in range(GROUPS_48):
+        a, b = values_of_byte(2 * g), values_of_byte(2 * g + 1)
+        out += [a & 15, b & 15, b >> 4]
+    return out
 
 
 def code_diffs(after, expected, symbols):
     """Addresses that differ, ignoring zero page, the stack page and
-    data the call itself writes (the probe's result byte)."""
+    data the call itself writes (the probe's result and retry count)."""
     skip = set()
-    if 'upic_probe_class' in symbols:
-        a, b = symbols['upic_probe_class']
-        skip.update(range(a, b))
+    for name in ('upic_probe_class', 'upic_probe_tries'):
+        if name in symbols:
+            a, b = symbols[name]
+            skip.update(range(a, b))
     return [a for a in range(0x200, 0x10000)
             if a not in skip and after[a] != expected[a]]
 
@@ -169,6 +228,20 @@ class ReleaseBuild(unittest.TestCase):
             patched_image(self.image, self.symbols, 0xA5), self.symbols, ELITE2)
         with self.assertRaises(RowTimingError):
             analyse(m, pixels, reads, 2 * COLUMNS)
+
+    def test_model_matches_u64_hardware_bisection(self):
+        # Measured on an Ultimate 64 Elite (2026-09-28) with the first
+        # 48 MHz layout: delay 56 renders cleanly, 57 puts every row two
+        # raster lines apart. The model gets this only because it charges
+        # the VIC read wait for `sta $d020,x`'s dummy read.
+        for dly, fits in ((56, True), (57, False), (DELAY_48 - 4, False)):
+            mem = first_48mhz_layout(self.image, self.symbols, dly)
+            m, pixels, reads = render_frame(mem, self.symbols, U64)
+            if fits:
+                analyse(m, pixels, reads, COLUMNS)
+            else:
+                with self.assertRaises(RowTimingError, msg='delay %d' % dly):
+                    analyse(m, pixels, reads, COLUMNS)
 
     # -- the 64 MHz path is unchanged ------------------------------------
     def test_64mhz_render_code_is_the_v103_layout(self):
@@ -225,6 +298,36 @@ class ReleaseBuild(unittest.TestCase):
             self.assertEqual(code_diffs(m.mem, expected, self.symbols), [],
                              'start line %d' % start)
 
+    def test_probe_restores_a_lost_speed_setting(self):
+        # The speed register reads back 1 MHz (index 0) when the probe
+        # starts, e.g. because something reset it after turbo_fast().
+        # The probe writes it again on every retry, so both boards still
+        # end up on their own path.
+        expected_48 = expected_48mhz_patch(self.image, self.symbols)
+        for ratio, expected in ((ELITE2, self.image), (U64, expected_48)):
+            m = select(self.image, self.symbols, ratio, d031=0x80)
+            self.assertEqual(code_diffs(m.mem, expected, self.symbols), [],
+                             'ratio %d' % ratio)
+
+    def test_probe_gives_up_at_1mhz(self):
+        # Turbo never comes on (e.g. no .cfg, Turbo Control off): the
+        # probe must stop after its retry budget and keep the 64 MHz
+        # path, not loop forever. The budget is cut from 256 loops to 3
+        # here to keep the test fast; the retry logic is the same.
+        image = bytearray(self.image)
+        image[self.symbols['upic_probe_tries'][0]] = 3
+        for ratio in (ELITE2, U64):
+            m = select(image, self.symbols, ratio, slow_until=10**12)
+            self.assertEqual(code_diffs(m.mem, image, self.symbols), [],
+                             'ratio %d' % ratio)
+        # Giving up always means the 64 MHz path, even when the last
+        # reading said 48 MHz: with a budget of one loop, a U64 at full
+        # speed reads 48 MHz once, has nothing to confirm it with, and
+        # must not take the 48 MHz path on that alone.
+        image[self.symbols['upic_probe_tries'][0]] = 1
+        m = select(image, self.symbols, U64)
+        self.assertEqual(code_diffs(m.mem, image, self.symbols), [])
+
     def test_selection_survives_forced_1mhz_after_reset(self):
         # The U64 runs the CPU at 1 MHz for a few seconds after a reset; the
         # probe usually starts inside that window. End the window at
@@ -245,29 +348,62 @@ class ReleaseBuild(unittest.TestCase):
     def test_48mhz_path_on_u64(self):
         mem = select(self.image, self.symbols, U64).mem
         m, pixels, reads = render_frame(mem, self.symbols, U64)
-        first, end, widths, slack = analyse(m, pixels, reads, COLUMNS)
+        first, end, widths, slack = analyse(m, pixels, reads, PIXELS_48)
         first64, end64, _, slack64 = self.geometry_64
-        self.assertEqual(widths, [2, 3])
-        # At least as much per-line slack as the hardware-proven path.
-        self.assertGreaterEqual(slack, slack64)
-        # Nearly the same screen area (see upic_viewer.c for the trade
-        # between the left edge and the slack).
-        self.assertLessEqual(abs(first - first64), 3)
-        self.assertLessEqual(abs(end - end64), 1)
-        # Each byte's low nibble (the even pixel) is what gets shown.
+        # 8 cycles per pixel at 47 per phi2: 1.36 dots, so 1 or 2.
+        self.assertEqual(widths, [1, 2])
+        # The picture starts one dot left of the 64 MHz one (see
+        # test_48mhz_delay_centres_the_pixels)...
+        self.assertEqual(first, first64 - 1)
+        # ...and the 94 groups reach past the 384-dot visible area
+        # (the 64 MHz path's pixel 369, the last one visible, ends 376
+        # dots after its first).
+        self.assertGreaterEqual(end - first64, 376)
+        # Well clear of the end of the line: the budget in upic_viewer.c
+        # leaves 38 cycles.
+        self.assertGreaterEqual(slack, cycles_48mhz(25, U64))
+        # Pixels 4m, 4m+2 and 4m+3 of every 4 are shown.
         for k in (0, 1, 128, 255):
-            row = pixels[k * COLUMNS:(k + 1) * COLUMNS]
+            row = pixels[k * PIXELS_48:(k + 1) * PIXELS_48]
             self.assertEqual([v & 15 for _, v in row],
-                             [pixel_byte(c, k) & 15 for c in range(COLUMNS)])
+                             shown_48mhz(lambda c: pixel_byte(c, k)))
 
-    def test_48mhz_delay_is_the_largest_that_keeps_that_slack(self):
-        # One more delay pass (5 cycles) must lose the margin, otherwise
-        # the picture could sit further right than it does.
+    def position_errors(self, dly):
+        """For each pixel the 48 MHz path shows with this delay, how far
+        (in dots) its centre lies from the centre of the same pixel on
+        the 64 MHz path, over the 376 dots the 64 MHz path shows."""
+        m, pixels, _ = self.trace_64
+        d64 = row_dots(m, pixels, 2 * COLUMNS)
+        centre64 = {p: (d64[p] + d64[p + 1]) / 2 for p in range(2 * COLUMNS - 1)}
         mem = select(self.image, self.symbols, U64).mem
-        mem[self.frame + DLY_OFFSET + 1] = DELAY_48 + 1
+        mem[self.frame + DLY_OFFSET + 1] = dly
+        m, pixels, _ = render_frame(mem, self.symbols, U64)
+        d48 = row_dots(m, pixels, PIXELS_48)
+        shown = [4 * g + q for g in range(GROUPS_48) for q in (0, 2, 3)]
+        return [(d48[j] + d48[j + 1]) / 2 - centre64[shown[j]]
+                for j in range(PIXELS_48 - 1) if d48[j + 1] <= d64[0] + 376]
+
+    def test_48mhz_delay_centres_the_pixels(self):
+        # The 48 MHz pitch is 0.5% wider, so no delay puts every pixel on
+        # its 64 MHz dots; DELAY_48 centres the error. Measured on an
+        # Ultimate 64 Elite against a C64 Ultimate (2026-09-28), and
+        # reproduced by the model: mean -0.80 / +0.05 / +0.90 dots and
+        # largest 2.5 / 1.5 / 2.5 dots for delays 98 / 99 / 100.
+        errors = {d: self.position_errors(d) for d in (DELAY_48 - 1, DELAY_48, DELAY_48 + 1)}
+        worst = {d: max(abs(e) for e in errors[d]) for d in errors}
+        mean = sum(errors[DELAY_48]) / len(errors[DELAY_48])
+        self.assertLessEqual(worst[DELAY_48], 1.5)
+        self.assertLess(abs(mean), 0.25)
+        self.assertLess(worst[DELAY_48], worst[DELAY_48 - 1])
+        self.assertLess(worst[DELAY_48], worst[DELAY_48 + 1])
+
+    def test_first_48mhz_layout_does_not_fit_on_u64(self):
+        # Negative control: the layout that failed on hardware, at the
+        # delay it shipped with, overruns the line in the model too.
+        mem = first_48mhz_layout(self.image, self.symbols, 96)
         m, pixels, reads = render_frame(mem, self.symbols, U64)
-        slack = analyse(m, pixels, reads, COLUMNS)[3]
-        self.assertLess(slack, self.geometry_64[3] + 5)
+        with self.assertRaises(RowTimingError):
+            analyse(m, pixels, reads, COLUMNS)
 
     def test_unpatched_path_does_not_fit_on_u64(self):
         # Negative control for the row checks.
@@ -294,12 +430,21 @@ class Force48Build(unittest.TestCase):
         # write switches to the patched index 14 (48 MHz on Elite II).
         mem = select(self.image, self.symbols, ELITE2).mem
         m, pixels, reads = render_frame(mem, self.symbols, ELITE2)
-        first, end, widths, slack = analyse(m, pixels, reads, COLUMNS)
         # How index 14's 48 cycles are spread within each phi2 on an
-        # Elite II is modelled only approximately (evenly), so accept
-        # either pixel width the U64 path shows.
-        self.assertLessEqual(set(widths), {2, 3})
-        self.assertGreaterEqual(slack, 2)
+        # Elite II is modelled only approximately (evenly). With that
+        # spread every other row starts one phi2 later in the model; on
+        # a real C64 Ultimate every row of the force48 build starts on
+        # the same dot (checked 2026-09-28, 50 frames). So this checks
+        # only what does not depend on the spread: every row fits its
+        # line with room to spare, pixels are 1-2 dots wide, and the
+        # shown pixels are the ones the U64 path shows.
+        first, end, widths, slack = analyse(m, pixels, reads, PIXELS_48,
+                                            constant_start=False)
+        self.assertLessEqual(set(widths), {1, 2})
+        self.assertGreaterEqual(slack, cycles_48mhz(25, ELITE2))
+        row = pixels[:PIXELS_48]
+        self.assertEqual([v & 15 for _, v in row],
+                         shown_48mhz(lambda c: pixel_byte(c, 0)))
 
 
 if __name__ == '__main__':

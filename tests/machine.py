@@ -16,7 +16,8 @@ needs. The model describes behaviour, not any particular implementation:
   48 MHz. With the display enabled, badline character fetches also
   take the first sub-slot of the second half of those cycles.
 - A $D031 write takes effect two sub-slots after it.
-- A VIC register read needs one extra sub-slot. Writes do not.
+- A VIC register read needs one extra sub-slot. Writes do not. This
+  includes the dummy read an indexed store makes (see mos6502.py).
 - The raster counter advances at the start of phi2 cycle 1 of each line
   (63 phi2 per PAL line, 312 lines), and at the 311 -> 0 wrap it reads
   311 for one more phi2.
@@ -144,9 +145,9 @@ class Machine:
                     return x
             x += 1
 
-    def tick(self, cycles, vic_read=False):
+    def tick(self, cycles, vic_reads=()):
         for i in range(cycles):
-            self.t = self._next_cycle(self.t, vic_read and i == cycles - 1)
+            self.t = self._next_cycle(self.t, i in vic_reads)
 
     # -- raster ---------------------------------------------------------
     def _raster(self, x):

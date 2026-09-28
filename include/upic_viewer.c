@@ -1103,7 +1103,8 @@ __asm render_frame
 #pragma code(code)
 
 // ---------------------------------------------------------------
-// 48 MHz display path (2026-09-21) -- Ultimate 64 / Elite I support.
+// 48 MHz display path (2026-09-21, reworked 2026-09-28 after the first
+// run on a real Ultimate 64 Elite) -- Ultimate 64 / Elite I support.
 //
 // Ultimate 64 turbo CPU timing: each phi2 cycle offers as many CPU
 // sub-slots as the board's top speed (64 on Elite II / C64U, 48 on
@@ -1112,38 +1113,62 @@ __asm render_frame
 // index 0 (1 MHz). The VIC-II uses one sub-slot of every phi2 for its
 // own memory access, so the top index gives 63 CPU cycles per phi2 on
 // Elite II / C64U and 47 on U64 / Elite I. A PAL line is 63 phi2 and
-// 504 dots.
+// 504 dots. Reading a VIC register costs the CPU one extra sub-slot;
+// writing one does not.
 //
 // Everything above was tuned for 64 MHz: 8 cycles per border-colour
-// write is about one dot. At 48 MHz the unchanged routine would need
-// 192 * 16 = 3072 cycles per line against 63 * 47 = 2961 available,
-// so it cannot fit. The 48 MHz path therefore shows every packed
-// byte's LOW nibble only (the even pixel of each pair) as one pixel
-// about 2 dots wide: 12 cycles per byte column, 2304 cycles per line.
-// The picture buffer, the generator and zoom.c are unchanged --
-// zoom.c's 2x2 corner markers always cover one even pixel, so they
-// stay visible.
+// write is about one dot. At 48 MHz 8 cycles are 1.36 dots, so the
+// full 384-pixel line (3072 cycles) would be 522 dots wide and would
+// not fit the 2820 cycles a line leaves (budget below). A load plus a
+// store to $D020 (8 cycles) is the cheapest way to show a pixel, so
+// at the 64 MHz path's picture width a 48 MHz line has time for about
+// 3 pixels in 4. The 48 MHz path shows exactly that: for every 4
+// pixels (byte columns A = 2m and B = 2m+1) it shows 3, 8 cycles each:
 //
-// Rather than a second 2 KB copy of render_line_pixels() (upiccode has
-// ~18 bytes to spare, see the .map), the existing routine is patched in
-// place, keeping its 12-byte stride per byte column:
+//   B9 al ah   lda A,y          pixel 4m     (A's low nibble)
+//   8D 20 D0   sta $d020
+//   BE bl bh   ldx B,y          pixel 4m+2   (B's low nibble)
+//   8E 20 D0   stx $d020
+//   BD nl nh   lda nybbles,x    pixel 4m+3   (B's high nibble)
+//   8D 20 D0   sta $d020
 //
-//   64 MHz (as built)            48 MHz (patched)
-//   BE lo hi  ldx col,y     4    B9 lo hi  lda col,y        4
-//   8E 20 D0  stx $d020     4    9D 20 D0  sta $d020,x      5  (X = 0)
-//   BD nl nh  lda nybbles,x 4    4C nx ny  jmp next column  3
-//   8D 20 D0  sta $d020     4    8D 20 D0  (skipped)
+// 24 cycles per 4 source pixels is 4.09 dots, against 4.06 at 64 MHz,
+// so each shown pixel is 1.36 dots wide (1 or 2 dots on screen) and 288
+// of the 384 pixels are shown. Pixel 4m+1 is the one left out because
+// it is the pixel whose dots its neighbours overlap most once the
+// group is stretched this way. The 0.5% difference in pitch adds up to
+// about 2 dots across the line, so the delay below centres the error
+// rather than pinning the left edge: measured on an Ultimate 64 Elite
+// against a C64 Ultimate, every shown pixel lies within 1.5 dots of
+// where the 64 MHz path shows the same pixel (0.5 dot on average, -0.8
+// at the left edge to +0.9 at the right), and the picture starts one
+// dot left of the 64 MHz one. With the left edges aligned (delay 100)
+// the pixels were +0.9 dot off on average and up to 2.5 at the right.
 //
-// = 12 cycles between border-colour writes. `sta abs,x` is used for its
-// fixed 5 cycles (indexed stores never take a page-crossing shortcut)
-// and `jmp` for its fixed 3, so no instruction's timing depends on data
-// or on where the column lands in memory. X is always 0 on entry: it
-// is left there by render_frame's own `dex / bne delay` loop, and the
-// patched routine never loads X. The last column's jmp lands on the
-// routine's original trailing rts. 47 cycles per phi2 do not divide
-// evenly into 12-cycle steps, so about one pixel in 24 is 3 dots wide
-// instead of 2 -- the same kind of effect as the 64 MHz path, where 63
-// cycles per phi2 make about one pixel in 64 two dots wide.
+// The last 12 bytes of a group are byte column B's own code, unchanged,
+// and `sta $d020` is the last instruction of column A. So the patch
+// below builds each 18-byte group from the as-built code -- `lda A,y`,
+// then A's bytes 9-11, then all of B -- and a group is shorter than the
+// two 12-byte columns it replaces, so the routine is rebuilt in place,
+// front to back, without overwriting anything it has yet to read.
+//
+// Only UPIC_GROUPS_48 of the 96 groups are drawn. The last two (pixels
+// 376-383) would start about 384 dots right of the picture's first
+// pixel, past the right edge of the 384-dot visible area, where the
+// 64 MHz path's pixels 370-383 aren't visible either. Leaving them out frees the 48 cycles
+// that let the picture sit where the 64 MHz one does (see the delay
+// below).
+//
+// Nothing here indexes into I/O space. The first version of this path
+// (2026-09-21) used `lda A,y / sta $d020,x / jmp next`, 12 cycles per
+// byte column on paper, and on a real Ultimate 64 Elite showed every
+// row two raster lines apart, the picture alternating between two
+// frames. An NMOS 6502 reads the target of an indexed store once before
+// writing it (the "dummy read"); for `sta $d020,x` that is a read of a
+// VIC register, which costs the extra sub-slot. At 13 cycles a column a
+// row overran its line: the largest delay that worked on hardware was
+// 56, not 97. tests/mos6502.py now models the dummy read, and the tests
+// fail for that version.
 //
 // Line budget. render_frame's `sta $d031 (#$80) / stx $d031 (#$8f)`
 // drops to index 0 for the stx's last three cycles, which then finish
@@ -1155,14 +1180,16 @@ __asm render_frame
 // sub-slot) must finish before the line ends:
 //
 //   64 MHz: 2 + (5*135-1) + 6 + 3072 + 6 + 13 + 5 = 3778 of 3780
-//   48 MHz: 2 + (5*D-1)   + 6 + 2304 + 6 + 13 + 5 = 5*D + 2335 of 2820
+//   48 MHz: 2 + (5*D-1)   + 6 + 2256 + 6 + 13 + 5 = 5*D + 2287 of 2820
 //
 // The 64 MHz value $87 therefore has 2 sub-slots to spare, which
 // matches the hardware bisection in render_frame (the next tested
-// value, $A5, skews). D must be at most 97; 96 leaves 5 to spare. With
-// D = 96 the 48 MHz picture starts 3 dots left of the 64 MHz one and
-// ends 1 dot short of it (dot positions measured in
-// tests/test_turbo_modes.py).
+// value, $A5, skews). At 48 MHz D = 100 would put the first pixel on
+// the 64 MHz path's first dot ((5*100-1) + 16 cycles at 47 per phi2
+// against (5*135-1) + 16 at 63); D = 99 moves the picture one delay
+// pass (0.85 dot) left, which centres the position error described
+// above, and leaves 38 cycles to spare. On an Ultimate 64 Elite the
+// picture stayed intact up to D = 108.
 //
 // render_frame operands patched:
 //   - dly: the delay before the first pixel, $87 -> UPIC_DELAY_48.
@@ -1190,15 +1217,25 @@ __asm render_frame
 // line, so a result is only accepted once two consecutive loops agree
 // on the same class; at most one loop per window can be affected.
 //
+// Each retry writes the turbo control byte again, so a machine whose
+// speed register was reset after turbo_fast() still gets there. If no
+// class is accepted within 256 loops (about 20 s at 1 MHz: turbo is
+// off, e.g. the program was started without its .cfg), the probe gives
+// up and keeps the unpatched 64 MHz path, as v1.0.3 did, rather than
+// waiting forever with nothing on screen.
+//
 // One-way: called once at startup, before the first frame, and never
 // undone. Lives in "main" (not upiccode) since it runs only once.
 // tests/test_turbo_modes.py runs this exact compiled code against a
 // model of the U64's turbo CPU timing (tests/machine.py).
 // ---------------------------------------------------------------
-#define UPIC_DELAY_48       96
+#define UPIC_DELAY_48       99
+#define UPIC_GROUPS_48      94
 #define UPIC_PROBE_START    0x20
 #define UPIC_PROBE_64MHZ    (UPIC_PROBE_START + 19)   // below: 64 MHz
 #define UPIC_PROBE_VALID    (UPIC_PROBE_START + 26)   // below: 48 MHz; else retry
+
+unsigned char upic_frame_quarters = 4;
 
 #ifndef UPIC_FORCE_48MHZ
 // Probe result: 1 = 64 MHz, 0 = 48 MHz. The whole retry loop is one
@@ -1209,6 +1246,9 @@ __asm render_frame
 // Starts at 2 (no valid result yet) as initialized data rather than
 // an asm store, which saved 5 bytes of the "main" region.
 static unsigned char upic_probe_class = 2;
+// Loops left before the probe gives up: 0 wraps to 256 on the first
+// decrement.
+static unsigned char upic_probe_tries = 0;
 #endif
 
 void upic_select_display_path(void)
@@ -1216,6 +1256,8 @@ void upic_select_display_path(void)
 #ifndef UPIC_FORCE_48MHZ
     __asm {
     retry:
+        lda #$8f                 // TURBO_SPEED_MAX | TURBO_BADLINES_OFF,
+        sta $d031                // again: see the comment above
     f1:
         lda $d011                // wait for the bottom of the frame...
         bpl f1
@@ -1252,26 +1294,34 @@ void upic_select_display_path(void)
         beq done                 // two loops in a row agree
     store:
         stx upic_probe_class
-        jmp retry
+        dec upic_probe_tries
+        bne retry
+        inc upic_probe_class     // gave up: any nonzero class keeps 64 MHz
     done:
     }
     if (upic_probe_class)
         return;
 #endif
 
-    char *p = (char *)(unsigned)render_line_pixels;
-    unsigned char c;
+    // Rebuild render_line_pixels() as UPIC_GROUPS_48 18-byte groups
+    // (see the comment above): group byte i comes from as-built byte i
+    // for i < 3 and byte i + 6 after that, then `ldx A,y` becomes
+    // `lda A,y`. Reads always run ahead of writes.
+    char *src = (char *)(unsigned)render_line_pixels;
+    char *dst = src;
+    unsigned char g, i;
 
-    for (c = 0; c < UPIC_WIDTH / 2; c++)
+    for (g = 0; g < UPIC_GROUPS_48; g++)
     {
-        char *next = p + 12;
-        p[0] = 0xb9;   // ldx abs,y  -> lda abs,y (same column address)
-        p[3] = 0x9d;   // stx $d020  -> sta $d020,x
-        p[6] = 0x4c;   // lda nybbles,x -> jmp next
-        p[7] = (unsigned char)((unsigned)next & 0xff);
-        p[8] = (unsigned char)((unsigned)next >> 8);
-        p = next;
+        for (i = 0; i < 18; i++)
+            dst[i] = src[i < 3 ? i : i + 6];
+        dst[0] = 0xb9;           // ldx abs,y -> lda abs,y
+        dst += 18;
+        src += 24;
     }
+    *dst = 0x60;                 // rts
+
+    upic_frame_quarters = 3;     // see upic_viewer.h
 
     __asm {
         lda #UPIC_DELAY_48
@@ -1489,8 +1539,11 @@ void upic_restore_display(void)
 // was re-bisected on that build and is still 68 (66 fails with the
 // error above), so 72 keeps 4 bytes over it. Region now has 0 bytes
 // free: BSS ends exactly where the stack section starts.
+// Back to 80 (2026-09-28): mandelbrot_generate() no longer links the
+// 32-bit division runtime (see its symmetry check), which freed about
+// 400 bytes of "main" -- more than the reworked 48 MHz patcher added.
 #pragma heapsize(0)
-#pragma stacksize(72)
+#pragma stacksize(80)
 #pragma region(main, 0x0853, 0x1800, , , {code, data, bss, heap, stack})
 
 // modlowbss: $0200-$0800, BSS ONLY -- confirmed by direct test (2026-09-09)

@@ -118,11 +118,35 @@ straddle `cy=0` the way the default view deliberately does.
 mirror-and-halve shortcut when valid; an asymmetric (typically zoomed)
 view computes all 256 rows directly.
 
+The check compares `mandel_y0` with `-(255 * mandel_dy / 2)`, computed
+as an unsigned 16-bit multiply and shift. `mandel_dy` is always 1..16
+(`zoom.c` never lets it leave that range), so the product fits 16 bits
+and is positive, and the shift rounds down exactly as the division
+truncated. The earlier signed 32-bit division was
+the only user of Oscar64's 32-bit division runtime (about 310 bytes of
+the default `main` region); replacing it freed about 400 bytes there.
+
 ## Live build-up while generating
 
-`mandelbrot_generate()` calls `upic_show_frame()` once per byte-column,
+`mandelbrot_generate()` calls `upic_show_frame()` while it computes,
 so the picture visibly builds up left-to-right as it's computed rather
-than appearing all at once.
+than appearing all at once. Each call shows the picture for one PAL
+frame; between calls the CPU computes and the picture is not shown.
+The picture therefore flickers during generation. This is a deliberate
+choice, not a defect: see the comment at the top of
+`mandelbrot_generate()`.
+
+Live frames are paced by work done, not by columns. Every computed row
+adds 4 to a work counter, so a whole column adds 4 times its row
+count. A frame is shown each time the counter reaches
+`upic_frame_quarters` times the row count, and the counter is then
+reduced by that amount. On the 64 MHz path
+`upic_frame_quarters` is 4, which gives exactly one frame per column,
+as in v1.0.3. On the 48 MHz path `upic_select_display_path()` sets it
+to 3, one frame every 3/4 column. A column takes about 1.34 times as
+long at 48 MHz. With one frame per column, an Ultimate 64 Elite showed
+the picture in 23% of frames during generation against 26% on a C64
+Ultimate; with this pacing both show it in 26% (measured 2026-09-28).
 
 `mandel_gen_mins`/`mandel_gen_secs`/`mandel_gen_tenths` (CIA1 TOD clock,
 reset at the start of generation) give an objective generation-time

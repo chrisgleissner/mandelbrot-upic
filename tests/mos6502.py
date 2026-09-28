@@ -10,8 +10,18 @@ performed at the END of the instruction (after all its cycles), which
 matches the last-cycle read/write of every absolute and indexed load
 and store this project's timing-critical code uses. The emulator does
 not own time itself: after each instruction it calls
-`bus.tick(cycles, vic_read)` and the bus decides when each of those
-cycles finishes in real time (see tests/machine.py).
+`bus.tick(cycles, vic_reads)` and the bus decides when each of those
+cycles finishes in real time (see tests/machine.py). `vic_reads` lists
+the cycles (0-based) that read VIC-II/colour-RAM space ($D000-$DFFF):
+the final data read of a load, and the dummy read an indexed access
+makes one cycle earlier. A real 6502 performs that dummy read on every
+indexed store, and on an indexed load only when the index crosses a
+page; it reads the base address's page at the indexed low byte, so
+`sta $d020,x` with X = 0 reads $D020 before writing it. That read costs
+a wait state on the U64 like any other VIC register read (measured on
+an Ultimate 64 Elite: see docs/UPIC_VIEWER.md). The dummy read's data
+is discarded and has no side effect on the registers modelled here, so
+only its timing is modelled.
 """
 
 
@@ -98,6 +108,10 @@ for _c, _name in [(0xAA, 'TAX'), (0x8A, 'TXA'), (0xA8, 'TAY'), (0x98, 'TYA'),
 
 _READS = {'LDA', 'LDX', 'LDY', 'ORA', 'AND', 'EOR', 'ADC', 'SBC', 'CMP',
           'CPX', 'CPY', 'BIT'}
+# Stores whose indexed forms always make a dummy read. Read-modify-write
+# instructions do too, but at a different cycle, and none of the
+# timing-critical code uses them indexed, so they are not modelled.
+_WRITES = {'STA', 'STX', 'STY'}
 
 _LEN = {'imp': 1, 'acc': 1, 'imm': 2, 'zp': 2, 'zpx': 2, 'zpy': 2, 'izx': 2,
         'izy': 2, 'rel': 2, 'abs': 3, 'abx': 3, 'aby': 3, 'ind': 3}
@@ -175,6 +189,7 @@ class CPU:
         self.pc = (pc + size) & 0xFFFF
 
         addr = None
+        dummy = None      # address of an indexed access's dummy read
         if mode == 'zp':
             addr = lo
         elif mode == 'zpx':
@@ -186,16 +201,22 @@ class CPU:
         elif mode in ('abx', 'aby'):
             idx = self.x if mode == 'abx' else self.y
             addr = (operand + idx) & 0xFFFF
-            if page_penalty and (addr & 0xFF00) != (operand & 0xFF00):
+            crossed = (addr & 0xFF00) != (operand & 0xFF00)
+            if page_penalty and crossed:
                 cycles += 1
+            if crossed or name in _WRITES:
+                dummy = (operand & 0xFF00) | (addr & 0xFF)
         elif mode == 'izx':
             zp = (lo + self.x) & 0xFF
             addr = self.bus.fetch(zp) | (self.bus.fetch((zp + 1) & 0xFF) << 8)
         elif mode == 'izy':
             base = self.bus.fetch(lo) | (self.bus.fetch((lo + 1) & 0xFF) << 8)
             addr = (base + self.y) & 0xFFFF
-            if page_penalty and (addr & 0xFF00) != (base & 0xFF00):
+            crossed = (addr & 0xFF00) != (base & 0xFF00)
+            if page_penalty and crossed:
                 cycles += 1
+            if crossed or name in _WRITES:
+                dummy = (base & 0xFF00) | (addr & 0xFF)
         elif mode == 'ind':
             # NMOS page-wrap bug on the pointer's high byte.
             addr = self.bus.fetch(operand) | (
@@ -217,11 +238,16 @@ class CPU:
 
         # All cycles elapse before the instruction's data access, so an
         # I/O read or write is time-stamped at the instruction's end.
-        # The bus is told when that last cycle reads VIC-II/colour-RAM
-        # space ($D000-$DFFF), which costs a wait period on the U64.
-        self._finish(cycles, vic_read=(
-            name in _READS and mode not in ('imm', 'acc')
-            and 0xD000 <= addr < 0xE000))
+        # The bus is told which cycles read VIC-II/colour-RAM space
+        # ($D000-$DFFF), which costs a wait period on the U64: the last
+        # one for a load, the one before it for an indexed dummy read.
+        vic_reads = []
+        if dummy is not None and 0xD000 <= dummy < 0xE000:
+            vic_reads.append(cycles - 2)
+        if (name in _READS and mode not in ('imm', 'acc')
+                and 0xD000 <= addr < 0xE000):
+            vic_reads.append(cycles - 1)
+        self._finish(cycles, tuple(vic_reads))
 
         def operand_value():
             return lo if mode == 'imm' else self.rd(addr)
@@ -338,6 +364,6 @@ class CPU:
         else:  # pragma: no cover - table and dispatch out of sync
             raise UnsupportedOpcode(name)
 
-    def _finish(self, cycles, vic_read=False):
+    def _finish(self, cycles, vic_reads=()):
         self.cycles += cycles
-        self.bus.tick(cycles, vic_read)
+        self.bus.tick(cycles, vic_reads)

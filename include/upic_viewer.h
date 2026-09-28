@@ -129,14 +129,23 @@ void upic_restore_display(void);
 
 // Measure the turbo ceiling and pick the display path. On an Elite II
 // / C64U (64 MHz at speed index 15) this changes nothing. On an
-// original Ultimate 64 / Elite I (48 MHz at index 15) it patches the
-// renderer to its 48 MHz path: same screen area, half the horizontal
-// resolution (each packed byte's even pixel, about 2 dots wide).
-// Call once, after rombank_out() and turbo_fast(), with interrupts
-// masked, before the first upic_show_frame(). PAL only. Built with
-// UPIC_FORCE_48MHZ (`make force48`) it skips the measurement and
-// always takes the 48 MHz path at index 14. See upic_viewer.c.
+// original Ultimate 64 / Elite I (48 MHz at index 15) it rebuilds the
+// renderer as its 48 MHz path: same screen area, 3 of every 4 pixels
+// shown (pixels 4m, 4m+2 and 4m+3, about 1.36 dots each), and sets
+// upic_frame_quarters to 3. Call once, after rombank_out() and
+// turbo_fast(), with interrupts masked, before the first
+// upic_show_frame(). PAL only. Built with UPIC_FORCE_48MHZ
+// (`make force48`) it skips the measurement and always takes the
+// 48 MHz path at index 14. See upic_viewer.c.
 void upic_select_display_path(void);
+
+// How much of a column mandelbrot_generate() computes between two live
+// frames, in quarters: 4 (a whole column) on the 64 MHz path, 3 on the
+// 48 MHz path. The 48 MHz CPU does about 3/4 as much work per frame
+// time (47 against 63 cycles per phi2), so this keeps the picture on
+// screen for the same share of the time on both machines while it is
+// being generated.
+extern unsigned char upic_frame_quarters;
 
 #pragma compile("upic_viewer.c")
 
