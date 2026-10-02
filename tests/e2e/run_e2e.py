@@ -220,14 +220,14 @@ class DeviceRun:
             time.sleep(0.2)     # a frame or two for the markers to be drawn
 
     def pattern(self):
-        # Byte column c is 256 bytes (one per row) at upic_buffer_reloc +
-        # 256*c for the first 8 columns and at upic_buffer + 256*(c-8)
-        # after that; both ranges are written in 4 KB pieces.
+        # Byte column c is 256 bytes (one per row) at $E000 + 256*c for the
+        # first 8 columns and at $1000 + 256*c after that (include/memmap.h,
+        # -dUII_UPIC_RELOC_COLS=8); both ranges are written in 4 KB pieces.
         reloc = b"".join(bytes([geometry.pattern_byte(c)]) * 256 for c in range(8))
         main = b"".join(bytes([geometry.pattern_byte(c)]) * 256 for c in range(8, geometry.COLUMNS))
         self.u.pause()
         try:
-            for base, data in ((self.sym["upic_buffer_reloc"], reloc), (self.sym["upic_buffer"], main)):
+            for base, data in ((0xE000, reloc), (0x1800, main)):
                 for i in range(0, len(data), 4096):
                     self.u.write_memory(base + i, data[i:i + 4096])
         finally:
@@ -287,6 +287,10 @@ class DeviceRun:
                         self.pattern()
         except (Failure, UltimateError) as e:
             self.fail(str(e))
+        except Exception as e:
+            # Anything else (a bug in this script, a missing symbol) is a
+            # failure too: a crashed thread must not let the run pass.
+            self.fail("unexpected error: %r" % e)
         finally:
             try:
                 self.unconfigure()

@@ -36,11 +36,10 @@ volatile unsigned char mandel_gen_tenths = 0;
 // entirely unused by this one) has ~3.7KB genuinely free, confirmed by
 // finding zero objects placed past $F159 in the .map. Safe to read
 // during mandelbrot_generate() specifically because rombank_out()
-// (MMAP_NO_ROM) already runs before it, for the same reason
-// upic_buffer_reloc ($E000-$EFFF) already needs and gets that -- see
-// upic_viewer.h. moddata/modcode already declared via #pragma
-// section(...) in upic_viewer.c, compiled first in main.c's #pragma
-// compile chain -- no need to redeclare here, just place into it.
+// (MMAP_NO_ROM) already runs before it, for the same reason picture
+// columns 0-7 ($E000-$E7FF) already need and get that. moddata/modcode
+// are declared in memmap.h, included first by main.c -- no need to
+// redeclare here, just place into it.
 // ---------------------------------------------------------------
 #pragma data(moddata)
 static const unsigned sq_table[512] = {
@@ -434,9 +433,11 @@ static unsigned char mandel_color(unsigned char iter)
 //256-row generation, see mandelbrot_generate()'s own comment on the
 // symmetry check) rather than the 128 a symmetric view actually needs.
 // 256 * 2 bytes = 512 bytes -- doesn't fit "main"'s own data/bss
-// budget (same wall sq_table hit -- see its own comment above), placed
-// in modbss alongside it instead (2026-09-10).
-#pragma bss(modbss)
+// budget (same wall sq_table hit -- see its own comment above). Was in
+// modbss ($E800 pool) from 2026-09-10; moved to the $0200-$07FF bss
+// overlay region (memmap.h) when the Upic library's generated renderer
+// took that pool's space.
+#pragma bss(bssovl1)
 static fixed_t cy2_table[UPIC_HEIGHT];
 #pragma bss(bss)
 
@@ -451,7 +452,7 @@ void mandelbrot_generate(void)
     // Live build-up via upic_show_frame() once per column, tried
     // 2026-09-09, REVERTED same day: confirmed on real hardware as
     // persistent flicker even after forcing the inter-column border
-    // color to black (see git history) -- render_frame() takes a fixed
+    // color to black (see git history) -- a frame takes a fixed
     // ~20ms (one real PAL frame, NOT sped up by turbo, since it's
     // synced to the actual raster beam), but computing one column took
     // considerably longer than that (~129ms/column average at the
@@ -470,10 +471,9 @@ void mandelbrot_generate(void)
     // design and removed once live rendering made it redundant (see
     // git history).
     //
-    // Columns 0..UPIC_RELOC_COLS-1 -> upic_buffer_reloc[] ($E000),
-    // the rest -> upic_buffer[] ($1800-territory) -- see
-    // upic_viewer.h's own doc comment for why the picture is split
-    // this way. Each byte-column covers 2 pixel columns (x=2*bytecol,
+    // Columns 0-7 at $E000, the rest from $1800 (upic_column(), see
+    // memmap.h for why the picture is split this way). Each
+    // byte-column covers 2 pixel columns (x=2*bytecol,
     // x=2*bytecol+1), packed low/high nibble -- see upic_viewer.h.
     //
     // Fixed on real hardware (2026-09-09, confirmed correct): the
@@ -536,9 +536,7 @@ void mandelbrot_generate(void)
     {
         fixed_t cx0 = (fixed_t)(mandel_x0 + (long)(bytecol * 2) * mandel_dx);
         fixed_t cx1 = (fixed_t)(cx0 + mandel_dx);
-        volatile char *dst = (bytecol < UPIC_RELOC_COLS)
-            ? &upic_buffer_reloc[(unsigned)bytecol * UPIC_HEIGHT]
-            : &upic_buffer[(unsigned)(bytecol - UPIC_RELOC_COLS) * UPIC_HEIGHT];
+        volatile char *dst = upic_column((char)bytecol);
 
         // Cardioid/bulb terms that depend only on this column's cx,
         // not on the row -- same hoisting idea as cy2_table above, the

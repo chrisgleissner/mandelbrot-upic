@@ -37,6 +37,7 @@ the same as in browse mode.
 | `Z` | Enter box mode | Cancel back to browse (no zoom) |
 | `O` | Zoom out one notch | Same |
 | `C` | Cycle palette | Same |
+| `F1` | Save the picture (`MANDELnn.UPIC`) | Same, without the markers |
 | `+` / `-` | -- | Grow / shrink the box |
 | `RETURN` | -- | Confirm: zoom into the box |
 
@@ -56,7 +57,7 @@ demos with no graceful exit path.
 ## Corner markers: buffer-drawn, not sprites
 
 Each corner marker is a 2x2 solid white block written directly into
-the packed picture buffer (`upic_buffer`/`upic_buffer_reloc`), not a
+the packed picture buffer, not a
 VIC-II hardware sprite. Hardware sprites cannot be composited at all
 while this project's Upic border-racing display technique holds
 `DEN=0` across the whole frame (confirmed via isolated standalone
@@ -69,9 +70,8 @@ in open-border tricks" technique, which describes briefly toggling
 not holding `DEN` low across an entire multi-frame session.
 
 `zoom_pixel_addr()` computes a pixel's address in the packed buffer
-(mirroring `mandelbrot_generate()`'s own split between
-`upic_buffer_reloc` for the first `UPIC_RELOC_COLS` byte-columns and
-`upic_buffer` for the rest); `zoom_get_pixel()`/`zoom_set_pixel()`
+through `upic_column()` (byte columns 0-7 are at `$E000`, the rest from
+`$1800`, see `include/memmap.h`); `zoom_get_pixel()`/`zoom_set_pixel()`
 read/write one pixel through the even-column-low-nibble/odd-column-
 high-nibble packing. Each marker's 4 covered pixels are backed up
 before being overwritten and restored before the marker moves again,
@@ -111,7 +111,13 @@ Oscar64's generic C library divider, which is deliberately never
 linked into this project otherwise (see its own comment) and would
 cost more code size than a small hand-written one for this single use.
 
-## Palette push happens in `main()`, not here
+## Palette push and saving happen in `main()`, not here
+
+Pressing `F1` works the same way: `zoom_select()` hides the corner
+markers (so they aren't saved), puts the current gradient in
+`zoom_pending_palette` and returns `ZOOM_SAVE`; `main()` writes the file
+(`save_picture()`, using the library's `uii_upic_save()`) and calls
+`zoom_select()` again, which draws the markers again in box mode.
 
 Pressing `C` returns `ZOOM_PALETTE_CHANGED` from `zoom_select()` rather
 than pushing the palette directly -- the caller (`main()`) pushes it
@@ -136,9 +142,10 @@ keyboard-matrix scan in `SEI`/`CLI`, matching the same protection
 ## Memory layout
 
 `zoom_select()` and most of this file's functions live in `upiccode`,
-a shared code/data/bss pool at `$E800-$FFFF` also used by
-`mandelbrot.c`'s `sq_table`/`cy2_table` and this file's own marker
-backup storage. This pool is tight -- `zoom_out_view()` specifically
+a shared code/data/bss pool at `$E800-$FFFF` also used by the generated
+Upic renderer, `mandelbrot.c`'s `sq_table`, the save code and this
+file's own marker backup storage (`cy2_table` moved to `$0200`-`$07FF`
+in v1.2.0; see `docs/UPIC_VIEWER.md`'s memory table). This pool is tight -- `zoom_out_view()` specifically
 is placed in `main` (the default code region) instead, since `upiccode`
 had no room left for it; it duplicates a small bounds-check inline
 rather than calling the equivalent helper still in `upiccode`, since a

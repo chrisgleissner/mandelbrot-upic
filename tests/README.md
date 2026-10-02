@@ -9,8 +9,8 @@ python3 -m unittest discover -s tests -v
 
 Python 3 standard library only, no packages to install. The tests read
 the PRGs and their Oscar64 `.map` files from `build/` and the
-end-to-end golden images from `e2e/golden/`. The 22 tests take about
-70 seconds (about 30 of them for the probe's full 256-loop give-up
+end-to-end golden images from `e2e/golden/`. The 16 tests take about
+40 seconds (about 30 of them for the probe's full 256-loop give-up
 case).
 
 The end-to-end test on real hardware (`make e2e`) lives in `e2e/`; see
@@ -20,7 +20,7 @@ The end-to-end test on real hardware (`make e2e`) lives in `e2e/`; see
 |---|---|
 | `mos6502.py` | Cycle-counting NMOS 6502 emulator (documented opcodes, page-crossing and branch penalties, the dummy read of indexed accesses). Raises on undocumented opcodes and decimal mode. |
 | `machine.py` | Loads a PRG plus `.map` and models the Ultimate 64's turbo CPU timing, raster counter and `$D020`/`$D031` registers. |
-| `test_turbo_modes.py` | 18 tests for the 48 MHz / 64 MHz display paths and the speed probe in `upic_select_display_path()`. |
+| `test_turbo_modes.py` | 12 tests for the 48 MHz / 64 MHz display paths (the library's generated Upic renderer) and the speed probe in `upic_select_display_path()`. |
 | `test_e2e_goldens.py` | 4 consistency checks on the committed end-to-end golden images (no hardware needed). |
 
 ## Timing model
@@ -56,63 +56,42 @@ later in the model, while on a real C64 Ultimate every row started on
 the same dot (50 frames checked, 2026-09-28). The force48 test
 therefore does not require a constant row start.
 
-The model is checked against real hardware in three places:
-
-- The bisection recorded in `render_frame()`'s comment: delay `$87`
-  works on an Elite II and `$A5` skews.
-  `test_model_matches_hardware_bisection` requires the model to agree.
-  The model also predicts that `$88` would already fail, which has not
-  been tried on hardware.
-- The bisection of the first 48 MHz layout (`lda col,y / sta $d020,x /
-  jmp next`, 2026-09-21) on an Ultimate 64 Elite: delay 56 works and 57
-  puts every row two raster lines apart.
-  `test_model_matches_u64_hardware_bisection` requires the model to
-  agree, which it does only because it models the dummy read.
-- The position of the 48 MHz path's pixels relative to the 64 MHz
-  path's, measured on an Ultimate 64 Elite against a C64 Ultimate for
-  delays 98, 99 and 100 (mean error -0.80, +0.05 and +0.90 dots).
-  `test_48mhz_delay_centres_the_pixels` checks the model's positions.
+The model is checked against real hardware through the geometry of
+both display paths, measured from the VIC video stream on an Ultimate
+64 Elite II and an Ultimate 64 Elite (firmware 3.15a, 2026-10-02): pixel
+0 on the first visible dot on both paths, every pixel one dot wide at
+64 MHz, and the 48 MHz path exact every 16 pixels. The tests below
+require the model to produce exactly that. Earlier checks (v1.1.x) also
+had the model reproduce two delay bisections and the 48 MHz position
+errors of the old in-project renderer, which the library replaced.
 
 ## What the tests check
 
-`test_turbo_modes.py`:
+`test_turbo_modes.py` (since v1.2.0 the display is the library's
+`ultimate_upic_lib`; `upic_select_display_path()` calls
+`uii_upic_init(UII_UPIC_AUTO)`, which generates the renderer):
 
-- The release PRG's 64 MHz render code is byte-for-byte the v1.0.3
-  instruction layout, and `render_frame`'s `dly`/`trb` operands are at
-  the offsets the patcher and tests assume.
-- `render_frame`'s delay loop does not cross a page (which would add a
-  cycle per pass), and `nybbles` is page-aligned.
-- `upic_select_display_path()` changes nothing on an Elite II. On a
-  U64 it rebuilds the render code into exactly the expected bytes,
-  which the test writes out instruction by instruction rather than
-  with the patcher's own copy rule, and sets `upic_frame_quarters` to
-  3. This holds from several starting raster lines, when the forced
-  1 MHz window ends at various points during the probe, and when the
-  speed register reads 1 MHz at the start (the probe writes it again
-  on every retry).
-- On a machine that never leaves 1 MHz the probe gives up after its
-  full 256-loop budget, keeps the 64 MHz path and leaves
-  `upic_probe_class` at 2. (The probe is the library's
-  `uii_turbo_probe_max()`, which keeps its retry counter in a local, so
-  the budget can no longer be cut short in the test; this test takes
-  about 30 s. The earlier one-loop-budget case, a single 48 MHz reading
-  not being enough, is covered by the library requiring two agreeing
-  readings and is no longer tested here.)
-- A full 256-row frame at 64 MHz (Elite II) and, after the rebuild, at
-  48 MHz (U64 at index 15; Elite II at index 14 in the force48 build):
-  every row stays inside one raster line, rows land on consecutive
-  lines, the next row's `$D012` poll finishes before its line ends,
-  and pixels are 1-2 dots wide.
-- The 48 MHz path shows pixels 4m, 4m+2 and 4m+3 of every 4, leaves
-  at least 25 cycles of the line unused, starts 1 dot left of the
-  64 MHz picture, and reaches at least as far right as the 64 MHz
-  path's last visible pixel (376 dots after its first dot). With
-  `UPIC_DELAY_48` every shown pixel is within 1.5 dots of where the
-  64 MHz path shows it and the mean error is below 0.25 dot; one delay
-  pass more or less makes the largest error bigger.
-- Negative controls: delay `$A5` at 64 MHz, the unpatched code at
-  48 MHz, and the first 48 MHz layout at its original delay (96) all
-  fail the row checks.
+- The probe picks the 64 MHz path on an Elite II model and the 48 MHz
+  path on a U64 model, and sets `upic_frame_quarters` (4 / 3). It still
+  does when the forced 1 MHz window after a reset ends at various points
+  during the probe, and when the speed register reads 1 MHz at the
+  start. On a machine that never leaves 1 MHz it gives up after its
+  full 256 loops (about 30 s in the model: the library keeps its retry
+  counter in a local), keeps the 64 MHz renderer and leaves
+  `upic_probe_class` at 2.
+- A full 256-row frame on both paths: every row stays inside one raster
+  line, rows land on consecutive lines, and the next row's `$D012` poll
+  finishes before its line ends.
+- 64 MHz: pixel k on dot first + k for all 384 pixels of every row.
+- 48 MHz: pixels 4m, 4m+2 and 4m+3 of all 96 groups; every 16th pixel
+  exactly on its ideal dot, every pixel within one dot of it (a group is
+  24 cycles = 4.085 dots), and pixel 0 on the same dot as on the 64 MHz
+  path.
+- force48 build (Elite II at index 14): the 48 MHz renderer is built,
+  every row shows 288 pixels on its own line in the 4m / 4m+2 / 4m+3
+  order; the probe is not linked.
+- Negative control: the 64 MHz renderer run at 48 MHz overruns its
+  lines, so the row checks can fail.
 
 `test_e2e_goldens.py` (the images `make e2e` compares against):
 
@@ -120,17 +99,17 @@ The model is checked against real hardware in three places:
   display paths, 384 x 272 with colour indexes 0-15.
 - Each 48 MHz golden shows the same picture as the 64 MHz golden,
   compared through the dot maps measured from the "pattern" goldens.
-- The pattern goldens show the pixels each path is meant to show, in
-  order; the 48 MHz picture starts 1 dot left of the 64 MHz one, pixel
-  4m+1 is absent from it, and both reach the right edge.
+- The pattern goldens show the exact geometry: at 64 MHz dot x shows
+  pixel x for all 384 dots; at 48 MHz pixels 4m, 4m+2 and 4m+3 (4m+1
+  absent), every 16th pixel on its ideal dot and every pixel within one
+  dot of it, filling all 384 dots.
 - Negative control: two different pictures fail the comparison.
 
-Mutations tried when the tests were first written (2026-09-21), each
-caught: leaving the delay unpatched, and disabling the probe's
-rejection of forced-1 MHz results (an Elite II then gets the 48 MHz
-path). Mutations tried on 2026-09-28, each caught: removing the
-dummy-read model from `mos6502.py` (2 tests fail), removing the class
-increment on the probe's give-up path (1 test fails), and removing the
-probe's per-retry write of the speed register (1 test fails). Those
-last two mutations were made in the in-project probe, which has since
-been replaced by the library's port of it (same logic).
+Mutation check on 2026-10-02: building with the 48 MHz delay one count
+off (`-dUII_UPIC_DELAY_48=53`) fails `test_paths_start_on_the_same_dot`.
+Earlier mutation checks (2026-09-21/28) were made on the in-project
+renderer and probe that the library replaced: leaving the delay
+unpatched, disabling the probe's rejection of forced-1 MHz results,
+removing the dummy-read model from `mos6502.py`, removing the probe's
+give-up class and its per-retry write of the speed register -- each was
+caught.

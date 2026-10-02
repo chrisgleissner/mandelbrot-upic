@@ -10,13 +10,23 @@ Requires firmware 3.15+ -- in practice an Ultimate 64 Elite 2 for now,
 since the corresponding C64U firmware hasn't been released yet.
 ******************************************************************/
 
+#include "memmap.h"            // first: sections the libraries are placed in
 #include <c64/cia.h>
+#include <string.h>
 #include "ultimate_turbo_lib.h"
 #include "ultimate_common_lib.h"
+#include "ultimate_dos_lib.h"
 #include "upic_viewer.h"
 #include "mandelbrot.h"
 #include "rombank.h"
 #include "zoom.h"
+
+// ---------------------------------------------------------------
+// Startup (initcode, memmap.h): runs once, before the first picture;
+// the same RAM is picture columns 184-191 afterwards.
+// ---------------------------------------------------------------
+#pragma code(initcode)
+#pragma data(initdata)
 
 // uii_setpalette() can be rejected ("81,INVALID P...") right after a
 // fresh device reboot, even on firmware where this exact call is
@@ -40,6 +50,128 @@ static void setpalette_retry(const char *rgb48)
 	}
 }
 
+// Returns whether the UCI answered (palette pushed).
+__noinline static unsigned char program_startup(void)
+{
+	unsigned char uci_ready = uii_wait_for_uci(5);
+
+	// Palette pushed before generation -- mandelbrot_generate() shows
+	// the picture LIVE as it builds (see its own comment), which needs
+	// the fractal's own palette active from the start to look right.
+	// A plain-text welcome/progress screen was tried in between (see
+	// git history) but removed once live rendering made it redundant
+	// -- the user explicitly preferred watching the picture build over
+	// a progress bar, flicker and all.
+	if (uci_ready)
+		setpalette_retry(mandelbrot_palette);
+
+	// Turbo on BEFORE generating, not just before displaying -- the
+	// whole point of doing this on-device is the 64x speedup on the
+	// escape-time iteration itself, which is by far the slow part.
+	uii_turbo_fast();
+
+	// One PRG for both turbo ceilings: an Elite II / C64U reaches 64 MHz
+	// at speed index 15, an Ultimate 64 / Elite I only 48 MHz. The
+	// library measures which and builds the matching Upic renderer (the
+	// 48 MHz one shows 3 of every 4 pixels) -- see
+	// upic_select_display_path() in upic_viewer.c. `make force48` builds a
+	// test-only PRG that always takes the 48 MHz path (at 48 MHz), so it
+	// can be checked on a 64 MHz machine.
+	upic_select_display_path();
+
+	return uci_ready;
+}
+
+#pragma code(code)
+#pragma data(data)
+
+// ---------------------------------------------------------------
+// F1: save the picture
+// ---------------------------------------------------------------
+// Saves MANDEL01.UPIC, MANDEL02.UPIC, ... (first free number) in the
+// current UCI directory as a Upic v1.3 file (ultimate_upic_lib): the
+// bitmap, the current gradient's palette, and two text lines with this
+// program's version and the view (mandel_x0/y0/dx/dy, 16-bit hex, Q5.11
+// fixed point). If the directory can't take the file (after a reset the
+// UCI's current directory can be the virtual root "/"), it tries once more
+// in the UCI home directory. The screen stays black while the file is
+// written; on an error the picture blinks three times.
+
+// 160 bytes of header text, in the $0200 bss region (memmap.h).
+#pragma bss(bssovl1)
+static char save_text[160];
+#pragma bss(bss)
+
+// In the $E800 pool (memmap.h): "main" has no room left for it.
+#pragma code(upiccode)
+#pragma data(moddata)
+
+static char *put_hex(char *p, unsigned v)
+{
+	char i;
+	for (i = 0; i < 4; i++)
+	{
+		char d = (char)(v >> 12);
+		*p++ = d < 10 ? 0x30 + d : 0x37 + d;   // ASCII 0-9, A-F
+		v <<= 4;
+	}
+	return p + 1;                              // one space between fields
+}
+
+static char save_picture(const char *palette)
+{
+	static char name[] = "MANDEL00.UPIC";
+	static const char title[] = "MANDELBROT UPIC " VERSION;
+	char home_tried = 0;
+	char *p;
+
+	memset(save_text, 0x20, 160);
+	memcpy(save_text, title, sizeof(title) - 1 < 40 ? sizeof(title) - 1 : 40);
+	p = put_hex(save_text + 40, (unsigned)mandel_x0);
+	p = put_hex(p, (unsigned)mandel_y0);
+	p = put_hex(p, (unsigned)mandel_dx);
+	put_hex(p, (unsigned)mandel_dy);
+
+	// Number 01-99 kept as two ASCII digits (no division needed).
+	name[6] = 0x30;
+	name[7] = 0x31;
+	for (;;)
+	{
+		if (uii_upic_save(name, palette, save_text, 0))
+			return 1;
+		if (uii_status[0] != 'F')                // not "FILE EXISTS"
+		{
+			if (home_tried)
+				return 0;
+			uii_change_dir_home();               // retry, same number
+			home_tried = 1;
+			continue;
+		}
+		if (++name[7] > 0x39)
+		{
+			name[7] = 0x30;
+			if (++name[6] > 0x39)
+				return 0;                        // all 99 in use
+		}
+	}
+}
+
+// Wait n frames with nothing drawn: the display is off, so the screen
+// shows the border color (black) meanwhile.
+static void wait_frames(char n)
+{
+	while (n--)
+	{
+		while (!(*(volatile char *)0xd011 & 0x80))
+			;
+		while (*(volatile char *)0xd011 & 0x80)
+			;
+	}
+}
+
+#pragma code(code)
+#pragma data(data)
+
 int main(void)
 {
 	unsigned char uci_ready;
@@ -61,38 +193,18 @@ int main(void)
 	// crash entirely on real hardware (tested extensively: C key, Q key,
 	// no more drops to text mode). This program never genuinely needs a
 	// real interrupt for anything -- no music, no raster-IRQ effects,
-	// every wait loop in this codebase (render_frame()'s own raster
+	// every wait loop in this codebase (the Upic frame loop's own raster
 	// sync included) is plain busy-polled -- so permanently masking IRQ
 	// costs nothing functionally. NMI (RESTORE key) still isn't masked
 	// by this (SEI can't touch it) but isn't part of this bug family.
 	__asm { sei }
 
-	uci_ready = uii_wait_for_uci(5);
+	uci_ready = program_startup();
 
-	// Palette pushed before generation -- mandelbrot_generate() shows
-	// the picture LIVE as it builds (see its own comment), which needs
-	// the fractal's own palette active from the start to look right.
-	// A plain-text welcome/progress screen was tried in between (see
-	// git history) but removed once live rendering made it redundant
-	// -- the user explicitly preferred watching the picture build over
-	// a progress bar, flicker and all.
-	if (uci_ready)
-		setpalette_retry(mandelbrot_palette);
-
-	// Turbo on BEFORE generating, not just before displaying -- the
-	// whole point of doing this on-device is the 64x speedup on the
-	// escape-time iteration itself, which is by far the slow part.
-	uii_turbo_fast();
-
-	// One PRG for both turbo ceilings (2026-09-21): an Elite II / C64U
-	// reaches 64 MHz at speed index 15, an Ultimate 64 / Elite I only 48
-	// MHz. The Upic renderer's timing is built for 64 MHz, so a 48 MHz
-	// machine gets a patched half-horizontal-resolution path -- see
-	// upic_select_display_path() in upic_viewer.c. `make force48` builds
-	// a test-only PRG that always takes that path (at 48 MHz), so it can
-	// be checked on a 64 MHz machine; a startup key for this did not fit
-	// in "main" (see upic_viewer.c's region comment).
-	upic_select_display_path();
+	// Startup is over: the initcode area ($C800-$CFFF, memmap.h) is
+	// picture columns 184-191 from now on. Clear it so the first live
+	// frames show black there, not the startup code as pixels.
+	memset(upic_column(184), 0, 8 * 256);
 
 	mandelbrot_generate();
 
@@ -112,6 +224,21 @@ int main(void)
 			if (uci_ready)
 				uii_setpalette(zoom_pending_palette);
 			continue;  // same view, no regenerate -- straight back to zoom_select()
+		}
+
+		if (zr == ZOOM_SAVE)
+		{
+			if (!uci_ready || !save_picture(zoom_pending_palette))
+			{
+				char i;
+				for (i = 0; i < 3; i++)        // error: blink three times
+				{
+					wait_frames(10);
+					for (zr = 0; zr < 10; zr++)
+						upic_show_frame();
+				}
+			}
+			continue;  // same view, back to zoom_select()
 		}
 
 		// ZOOM_CONFIRMED

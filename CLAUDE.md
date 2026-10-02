@@ -17,7 +17,7 @@ Ultimate 64 Elite (48 MHz path), both firmware 3.15a. The C64 Ultimate
 needs its palette-control firmware release (expected 1.2, not yet out
 as of v1.1.1); PR #2's author ran the PRG on a 1.2 release candidate.
 
-**Status**: v1.1.1, feature-complete. See `README.md` for controls and
+**Status**: v1.2.0, feature-complete. See `README.md` for controls and
 installation, `docs/ARCHITECTURE.md` for the project layout,
 `docs/MANDELBROT_ALGORITHM.md` for the fractal generator's design,
 `docs/UPIC_VIEWER.md` for the display technique, and
@@ -86,34 +86,47 @@ behind a version/capability check.
 
 ## Memory layout
 
-The shared `upiccode`/`moddata`/`modbss` code/data/bss pool
-(`$E800`-`$FFFF`) is this project's tightest memory budget -- see
-`docs/ZOOM_FEATURE.md`'s memory-layout section before adding anything
-there. Oscar64's linker can, in rare cases, silently wrap an object's
+All sections and regions are declared in `include/memmap.h` (included
+first by `main.c`; the libraries are placed in them through the `-d`
+flags in the Makefile's `UPICFLAGS`). See `docs/UPIC_VIEWER.md`'s
+"Memory regions" table for what lives where.
+
+The shared `upiccode`/`moddata`/`modbss`/`upicgen` pool
+(`$E800`-`$FFFF`) holds the generated Upic renderer (first, so it starts
+page-aligned), zoom code, `sq_table` and the save code; 53 bytes free. Oscar64's linker can, in rare cases, silently wrap an object's
 address past `$10000` back down near `$0000` instead of raising a
 placement error. Always verify actual object placement via the
 build's own `.map` file after changing anything in this pool -- a
 clean build alone is not sufficient evidence of correct placement this
 close to the boundary.
 
-The default `main` region (`$0853`-`$1800`) has 200 bytes free in the
-current build: BSS ends at `$16E8` and the stack section starts at
-`$17B0`, with `stacksize` 80 (the compiler's minimum is 68). It had 0
-bytes free, with `stacksize` cut to 72, until `mandelbrot_generate()`'s
-symmetry check stopped linking Oscar64's 32-bit division runtime
-(about 310 bytes). A 32-bit division anywhere in the program links
-that runtime back in. Check the `.map` after adding anything there; the linker
-reports "Cannot place stack section" when it overflows.
+The default `main` region (`$0853`-`$1800`) has 35 bytes free in the
+current build: BSS ends at `$178D` and the stack section starts at
+`$17B0`, with `stacksize` 80 (the compiler's minimum is 68). A 32-bit
+division -- or a plain 8-bit `/` or `%` (`divmod`, ~140 bytes) --
+anywhere in the program links a division runtime in. Check the `.map`
+after adding anything there; the linker reports "Cannot place stack
+section" when it overflows. When a build fails, the old `.map` stays:
+to measure an overflow, build once with the region temporarily
+enlarged.
+
+Startup-only code goes in `initcode` (`$C800`-`$CFFF`, the last 8
+picture columns, overwritten by the first generation): the Upic
+renderer generator, the speed probe, the turbo module and
+`program_startup()`. Nothing there may be called after startup. Oscar64
+inlines a static function called once into its caller, losing its
+`#pragma code` -- keep such functions `__noinline`.
 
 Turbo CPU timing (sub-slots per phi2, the VIC's share, the 1 MHz
 window after reset) is summarised in `docs/UPIC_VIEWER.md` and
 implemented in `tests/machine.py`; read those before reasoning about
 cycle budgets.
 
-`render_frame()` is a named `__asm` block so `upic_select_display_path()` can
-patch its `dly`/`trb` operands by label. `tests/test_turbo_modes.py`
-asserts those operands' offsets and that its delay loop doesn't cross
-a page, so keep those tests passing after touching it.
+The Upic display is the library's (`ultimate_upic_lib`, v1.3.0): an
+exact one-dot pixel pitch on both the 64 MHz and the 48 MHz path, with
+a renderer generated at startup. `tests/test_turbo_modes.py` checks its
+geometry and line budget in the timing model; `make e2e` checks it on
+hardware.
 
 Interrupts are masked globally for the program's entire lifetime (see
 `main.c`'s own comment) -- this program has no functional need for a

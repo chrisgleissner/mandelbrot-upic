@@ -87,7 +87,7 @@ extern fixed_t mandel_dy;
 #define MANDEL_DEFAULT_X1 (MANDEL_DEFAULT_X0 + UPIC_WIDTH  * MANDEL_DEFAULT_DX)
 #define MANDEL_DEFAULT_Y1 (MANDEL_DEFAULT_Y0 + UPIC_HEIGHT * MANDEL_DEFAULT_DY)
 
-// mandelbrot_generate -- fill upic_buffer[]/upic_buffer_reloc[] (see
+// mandelbrot_generate -- fill the picture buffer (upic_column(), see
 // upic_viewer.h) with a rendered Mandelbrot set at the default view,
 // packed directly into Upic's nibble-packed column-major format.
 // Palette: caller must still push mandelbrot_palette (see below) via
@@ -104,9 +104,8 @@ extern fixed_t mandel_dy;
 // for that as of 2026-09-12, see that header's own comment for the
 // tradeoff this accepts.
 //
-// Call after rombank_out() (upic_buffer_reloc, like upic_buffer,
-// genuinely requires MMAP_NO_ROM active to write correctly -- see
-// upic_viewer.h) and ideally after uii_turbo_fast() (see ultimate_turbo_lib.h) --
+// Call after rombank_out() (picture columns 0-7 at $E000 genuinely
+// require MMAP_NO_ROM active to write correctly -- see memmap.h) and ideally after uii_turbo_fast() (see ultimate_turbo_lib.h) --
 // nothing about generation depends on turbo being on, but at stock
 // 1 MHz this is slow enough to be worth avoiding.
 void mandelbrot_generate(void);

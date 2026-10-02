@@ -8,18 +8,20 @@ on-device at 64 MHz turbo, packs it directly into Upic format (a
 live as it renders, and lets you interactively pan around and zoom
 into any region of the result.
 
-The same PRG also runs on an original Ultimate 64 or Ultimate 64 Elite
-(48 MHz turbo maximum). It measures the CPU speed at startup and, on a
-48 MHz machine, shows 288 of the 384 pixels per line (3 of every 4,
-each about 1.36 dots wide) at the same size and screen position: every
-shown pixel is within 1.5 dots of where a 64 MHz machine shows it. The
-48 MHz path has been checked on an Ultimate 64 Elite, against a C64
-Ultimate running the same PRG (see `make e2e` under
-[Make targets](#make-targets)).
+Every pixel is exactly one dot wide and the picture fills the whole
+384-dot visible area. The same PRG also runs on an original Ultimate 64
+or Ultimate 64 Elite (48 MHz turbo maximum): it measures the CPU speed at
+startup and, on a 48 MHz machine, shows 288 of the 384 pixels per line
+(3 of every 4) on the same dots, at the same size and position. Both are
+checked on real hardware with an automated end-to-end test (`make e2e`,
+see [Make targets](#make-targets)).
+
+Press F1 to save the current picture as a `.upic` file (Upic v1.3
+format, with its palette), for example to view it in other Upic tools.
 
 See `CREDITS.md` for full attribution.
 
-**Status**: v1.1.1, feature-complete and confirmed working on real
+**Status**: v1.2.0, feature-complete and confirmed working on real
 hardware: an Ultimate 64 Elite II (64 MHz path) and an Ultimate 64
 Elite (48 MHz path), both on firmware 3.15a.
 
@@ -30,6 +32,7 @@ interactive zoom.
 ## Contents
 
 - [Controls](#controls)
+  - [Saving pictures](#saving-pictures)
 - [Installation](#installation)
 - [Building from source](#building-from-source)
 - [Documentation](#documentation)
@@ -48,6 +51,7 @@ live, left to right. Once it completes, you're in **browse mode**:
 | `Z` | Enter box mode to pick a zoom target |
 | `O` | Zoom out one notch (widens the view, clamped to the original overview) |
 | `C` | Cycle the base color gradient (sunset, fire, amethyst, rainbow) |
+| `F1` | Save the picture as `MANDELnn.UPIC` (see [Saving pictures](#saving-pictures)) |
 
 Panning regenerates the fractal at the same zoom level, shifted --
 each step is a fraction of the current view's own size, so it moves
@@ -73,7 +77,7 @@ blocks) appear, outlining a box that always keeps the picture's own
 | `-` | Shrink the box (aspect ratio unchanged) |
 | `RETURN` | Confirm and zoom into the box |
 | `Z` | Cancel back to browse mode without zooming |
-| `C` / `O` | Same as browse mode |
+| `C` / `O` / `F1` | Same as browse mode (F1 saves without the markers) |
 
 Confirming regenerates the fractal at the selected region and returns
 to browse mode. Repeated zooms compose relative to whatever's
@@ -91,6 +95,21 @@ implementation, not a bug -- see `docs/MANDELBROT_ALGORITHM.md`.
 
 **No quit key** -- reset or power off to exit, same as many C64 demos
 with no graceful exit path. See `docs/ZOOM_FEATURE.md` for why.
+
+### Saving pictures
+
+`F1` saves the picture shown -- without the zoom box markers -- as
+`MANDEL01.UPIC`, `MANDEL02.UPIC`, ... (the first free number). The screen
+stays black for a moment while the file is written; if saving fails the
+picture blinks three times. Files go to the Ultimate's current directory,
+or its home directory when the current one can't take files (after a
+reset that can be the virtual root `/`).
+
+The file is a Upic v1.3 picture: a 256-byte header (with the active
+gradient's palette, and two text lines: the program version and the view
+coordinates) followed by the 49152-byte bitmap. Aleksi Eeben's Upic
+tools use this format; the bitmap part is the same as the `.upic` files
+of his Upic Image Converter.
 
 ## Installation
 
@@ -182,7 +201,7 @@ cp .env.example .env
 | [`docs/MANDELBROT_ALGORITHM.md`](docs/MANDELBROT_ALGORITHM.md) | Fixed-point fractal generation algorithm |
 | [`docs/UPIC_VIEWER.md`](docs/UPIC_VIEWER.md) | The Upic border-color raster display technique |
 | [`docs/ZOOM_FEATURE.md`](docs/ZOOM_FEATURE.md) | Interactive pan/zoom/palette control scheme |
-| [`lib/ultimate-uci-oscar64`](https://github.com/xahmol/ultimate-uci-oscar64) | The Ultimate libraries (UCI protocol, U64 CPU speed control), included as a git submodule; manuals in its `docs/` |
+| [`lib/ultimate-uci-oscar64`](https://github.com/xahmol/ultimate-uci-oscar64) | The Ultimate libraries (UCI protocol, U64 CPU speed control, the Upic display and `.upic` files), included as a git submodule; manuals in its `docs/` (`UPIC_MANUAL.md` for the display) |
 | [`docs/OSCAR64_MANUAL.md`](docs/OSCAR64_MANUAL.md) | Oscar64 compiler reference (copy of the maintainer's canonical manual) |
 | [`tests/README.md`](tests/README.md) / [`tests/e2e/README.md`](tests/e2e/README.md) | Host-side timing tests and the end-to-end test on real hardware |
 | [`CHANGELOG.md`](CHANGELOG.md) | Version history |

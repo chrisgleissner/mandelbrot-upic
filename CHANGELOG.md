@@ -1,24 +1,52 @@
 # Changelog
 
-## [Unreleased]
+## [1.2.0]
 
+Exact pixel width on every machine, and saving pictures.
+
+- **Exact pixel pitch.** Every pixel is now exactly one dot wide and the
+  picture fills the whole 384-dot visible area: until v1.1.1 a pixel was
+  64/63 of a dot at 64 MHz, the picture started 8 dots in and pixels
+  370-383 fell beyond the right edge. The display is now the Upic module
+  of ultimate-uci-oscar64 (`ultimate_upic_lib`, library 1.3.0), based on
+  Aleksi Eeben's Upic v1.3 renderer: every 8th pixel pair comes from an
+  immediate operand patched before each line, so 16 pixels take exactly
+  16 dots. The 48 MHz path (Christian Gleissner, v1.1.0) gets the same
+  exact pitch (every 4th group patched) and now shows all 96 groups;
+  both paths put every pixel on the same dots. Measured on an Ultimate
+  64 Elite II and an Ultimate 64 Elite from the VIC video stream.
+- **F1 saves the picture** as `MANDEL01.UPIC`, `MANDEL02.UPIC`, ... (first
+  free number) in the Upic v1.3 format: a 256-byte header with the
+  current gradient's palette and two text lines (program version, view
+  coordinates), then the 49152-byte bitmap. Works in browse and box mode
+  (markers are left out). Falls back to the UCI home directory when the
+  current one can't take files; blinks three times on an error.
+- New memory layout (`include/memmap.h`): startup-only code (renderer
+  generator, speed probe, turbo module, `program_startup()`) runs from
+  the last 8 picture columns ($C800-$CFFF) before the picture is
+  computed; the generated renderer sits at the start of the $E800 pool;
+  `cy2_table`, the nybble table and the UCI buffers are in the $0200
+  bss region (UCI command buffer 64 bytes, `-dUII_COMMAND_MAX=64`).
+- README screenshots replaced with pixel-exact captures from the video
+  stream (Elite II, 64 MHz path), in each gradient's own palette.
+- Tests rewritten for the library renderer (exact geometry on both
+  paths, line budget, probe); golden images regenerated. The e2e test
+  now counts any unexpected error in a device's run as a failure (a
+  crashed run used to pass).
 - The Ultimate libraries now come from their own repository,
   [ultimate-uci-oscar64](https://github.com/xahmol/ultimate-uci-oscar64)
   (v1.2.0), as the git submodule `lib/ultimate-uci-oscar64`; clone with
   `--recursive`. Replaces the project's own `ultimate_common_lib` and
   `turbo.c` copies and their manuals (now in the library's `docs/`);
-  `turbo_fast()` becomes `uii_turbo_fast()`. The 48/64 MHz speed probe
-  stays in `upic_viewer.c`. Memory: the `$E800` pool gains 14 bytes,
-  the main region has 288 bytes free (was 323). Verified with
-  `make test` and `make e2e` on an Ultimate 64 Elite II and an Ultimate
-  64 Elite (firmware 3.15a); startup and generation times unchanged.
+  `turbo_fast()` becomes `uii_turbo_fast()`. Verified with `make test`
+  and `make e2e` on an Ultimate 64 Elite II and an Ultimate 64 Elite
+  (firmware 3.15a); startup and generation times unchanged.
 - The 48/64 MHz speed probe is now the library's `uii_turbo_probe_max()`,
   a port of the probe Christian Gleissner wrote for v1.1.0, instead of
   this project's own copy in `upic_select_display_path()`. Same method
   and thresholds; the library also restores `$D030`/`$D031` afterwards
-  and returns at once when there are no turbo registers. The main
-  region now has 200 bytes free. `make test`'s give-up case runs the
-  full 256-loop budget (about 30 s). Verified with `make e2e` on both
+  and returns at once when there are no turbo registers. `make test`'s
+  give-up case runs the full 256-loop budget (about 30 s). Verified with `make e2e` on both
   devices, and 6 restarts each: always the right path (probe readings
   16 lines on the Elite II, 21 on the Elite).
 

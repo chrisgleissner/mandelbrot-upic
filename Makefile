@@ -39,8 +39,8 @@ MAIN = mandelupic
 
 # Build versioning
 VERSION_MAJOR     = 1
-VERSION_MINOR     = 1
-VERSION_PATCH     = 1
+VERSION_MINOR     = 2
+VERSION_PATCH     = 0
 VERSION_TIMESTAMP = $(shell date "+%Y%m%d-%H%M")
 VERSION           = v$(VERSION_MAJOR).$(VERSION_MINOR).$(VERSION_PATCH)-$(VERSION_TIMESTAMP)
 
@@ -68,6 +68,21 @@ VERSION           = v$(VERSION_MAJOR).$(VERSION_MINOR).$(VERSION_PATCH)-$(VERSIO
 # submodule to the new tag.
 UCILIB = lib/ultimate-uci-oscar64/include
 
+# Library placement and picture layout (sections declared in
+# include/memmap.h):
+#   UII_UPIC_RELOC_*  picture columns 0-7 at $E000 (main occupies $0853-$17FF)
+#   UII_UPIC_GEN      generated line renderer, $E800 pool
+#   UII_UPIC_NYB      its nybble table, $0200-$07FF (bss)
+#   UII_UPIC_INIT     renderer generator + speed probe, startup-only code
+#   UII_UPIC_DATA     its data (the .upic header template), $E800 pool
+#   UII_TURBO_CODE    turbo module, only used at startup
+#   UII_COMMON_BSS    UCI buffers (520-byte command buffer) at $0200-$07FF
+UPICFLAGS = -dUII_UPIC_RELOC_COLS=8 -dUII_UPIC_RELOC_BASE=0xE000 \
+            -dUII_UPIC_GEN=upicgen -dUII_UPIC_NYB=bssovl1 -dUII_UPIC_INIT=initcode \
+            -dUII_UPIC_DATA=moddata \
+            -dUII_TURBO_CODE=initcode -dUII_TURBO_DATA=initdata \
+            -dUII_COMMON_BSS=bssovl1
+
 CFLAGS = -i=include \
          -i=$(UCILIB) \
          -tm=$(SYS) \
@@ -77,6 +92,8 @@ CFLAGS = -i=include \
          -dHEAPCHECK \
          -dDATA_QUEUE_SZ=52 \
          -dSTATUS_QUEUE_SZ=12 \
+         -dUII_COMMAND_MAX=64 \
+         $(UPICFLAGS) \
          -dVERSION="\"$(VERSION)\""
 
 # Main source (Oscar64 follows #pragma compile chains from here)
@@ -85,6 +102,7 @@ MAINSRC = src/main.c
 # All sources that Oscar64 compiles via #pragma compile chains.
 # Listed here so make rebuilds when any of them change.
 ALLSRCS = $(MAINSRC) \
+          include/memmap.h \
           include/upic_viewer.c include/upic_viewer.h \
           include/rombank.c include/rombank.h \
           include/mandelbrot.c include/mandelbrot.h \

@@ -6,11 +6,18 @@ Border-color raster picture technique by **Aleksi Eeben**
 (aleksi.eeben@me.com) -- see `Source/upic.s` in the Upic Image
 Converter package, https://csdb.dk/release/?id=263980 (the original
 Upic release is https://csdb.dk/release/?id=263889). Ported to Oscar64/C for
-the Ultimate 64 by Xander Mol; `include/upic_viewer.c`/`upic_viewer.h`
-and `include/rombank.c`/`rombank.h` implement this port, including a
-picture-buffer relocation (part of the picture data moved to `$E000`,
-freeing low memory for ordinary code) that was Aleksi Eeben's own
-suggestion.
+the Ultimate 64 by Xander Mol, including a picture-buffer relocation
+(part of the picture data moved to `$E000`, freeing low memory for
+ordinary code) that was Aleksi Eeben's own suggestion.
+
+Since v1.2.0 the display is the Upic module of the ultimate-uci-oscar64
+library (`lib/ultimate-uci-oscar64`, `ultimate_upic_lib`), based on
+Aleksi Eeben's **Upic v1.3** source (`display.s`, `drawing.s`, shared with
+Xander Mol in private correspondence, 2026-10-02): the line renderer with
+per-line patched immediate operands that gives the exact one-dot pixel
+pitch, the raster-IRQ viewer, the drawing routines and the v1.3 `.upic`
+header layout used by the F1 save. `include/upic_viewer.c`/`upic_viewer.h`
+and `include/rombank.c`/`rombank.h` are this program's layer over it.
 
 ## Mandelbrot fixed-point algorithm design
 
@@ -102,8 +109,9 @@ this brings back.
 [pull request #2](https://github.com/xahmol/mandelbrot-upic/pull/2))
 contributed the 48 MHz display path for the original Ultimate 64 /
 Elite I, including the startup speed probe that picks the path from
-the same PRG (`upic_select_display_path()` in
-`include/upic_viewer.c`), the fix for a startup hang in the UCI
+the same PRG (first in `upic_select_display_path()` in
+`include/upic_viewer.c`; both are in the ultimate-uci-oscar64 library
+since v1.2.0, the probe as `uii_turbo_probe_max()`), the fix for a startup hang in the UCI
 library's command handshake (`ultimate_common_lib.c`, now part of the
 ultimate-uci-oscar64 library), the
 host-side cycle-counting 6502 test suite (`tests/`) and the end-to-end

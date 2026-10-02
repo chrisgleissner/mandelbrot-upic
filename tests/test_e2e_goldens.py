@@ -58,16 +58,24 @@ class Goldens(unittest.TestCase):
         self.assertGreater(len(bad), 1000)
 
     def test_pattern_geometry(self):
-        m48, m64 = self.maps['48mhz'], self.maps['64mhz']
-        # pixel_map() already checked the order of the shown pixels; here
-        # the 48 MHz picture starts one dot left of the 64 MHz one (its
-        # delay centres the position error, see upic_viewer.c) and both
-        # fill the visible width.
-        self.assertEqual(m48.index(0), m64.index(0) - 1)
+        # Exact pitch (ultimate_upic_lib, since v1.2.0). 64 MHz: dot x shows
+        # pixel x, all 384. 48 MHz: pixels 4m, 4m+2, 4m+3 (4m+1 left out); a
+        # group is 24 cycles = 4.085 dots, so inside a 16-pixel span a pixel
+        # can start one dot off its ideal dot (4m, 4m+2, 4m+3), while every
+        # 16th pixel is exact. Both start on dot 0 and fill all 384 dots.
+        self.assertEqual(self.maps['64mhz'], geometry.expected_map('64mhz'))
+        m48 = self.maps['48mhz']
+        first = {}
+        for x, p in enumerate(m48):
+            if p is not None and p not in first:
+                first[p] = x
+        self.assertEqual(sorted(first), geometry.shown_pixels('48mhz'))
+        for p, x in first.items():
+            self.assertLessEqual(abs(x - p), 1, 'pixel %d on dot %d' % (p, x))
+            if p % 16 == 0:
+                self.assertEqual(x, p, 'pixel %d' % p)
+        self.assertIsNotNone(m48[0])
         self.assertIsNotNone(m48[-1])
-        self.assertIsNotNone(m64[-1])
-        self.assertNotIn(1, m48)      # pixel 4m+1 is the one left out
-        self.assertIn(1, m64)
 
 
 if __name__ == '__main__':

@@ -1,17 +1,17 @@
 """Which picture pixel each screen dot shows, and the 48 MHz / 64 MHz cross-check.
 
-The 64 MHz path shows all 384 pixels of a row, about one dot each. The
-48 MHz path (Ultimate 64 / Elite I) shows pixels 4m, 4m+2 and 4m+3 of
-every 4, about 1.36 dots each, for m < 94 (see upic_viewer.c). Neither
-path's dots line up exactly with the other's, so the two are compared
-through measured maps rather than a formula: the "pattern" step of the
-end-to-end test fills the picture with a stripe pattern in which every
-pixel differs from its neighbours, and the captured frame then says which
-pixel each dot shows.
+The 64 MHz path shows all 384 pixels of a row, exactly one dot each. The
+48 MHz path (Ultimate 64 / Elite I) shows pixels 4m, 4m+2 and 4m+3 of all
+96 groups: 4m on dots 4m and 4m+1, 4m+2 and 4m+3 on their own dot (since
+v1.2.0, ultimate_upic_lib's exact pitch). The two are compared through
+measured maps: the "pattern" step of the end-to-end test fills the
+picture with a stripe pattern in which every pixel differs from its
+neighbours, and the captured frame then says which pixel each dot shows.
+expected_map() gives the exact map each path should produce.
 """
 
 COLUMNS = 192
-GROUPS_48 = 94          # UPIC_GROUPS_48 in include/upic_viewer.c
+GROUPS_48 = 96          # all 96 groups (ultimate_upic_lib 48 MHz path)
 
 
 def pattern_byte(column):
@@ -33,6 +33,17 @@ def shown_pixels(mode):
     if mode == "64mhz":
         return list(range(2 * COLUMNS))
     return [4 * m + q for m in range(GROUPS_48) for q in (0, 2, 3)]
+
+
+def expected_map(mode, first=0, width=384):
+    """The exact dot -> pixel map of a path whose pixel 0 starts on dot
+    `first` (None for dots outside the picture)."""
+    dots = [None] * width
+    for x in range(2 * COLUMNS):
+        p = x if mode == "64mhz" else (x & ~1 if x % 4 < 2 else x)
+        if 0 <= first + x < width:
+            dots[first + x] = p
+    return dots
 
 
 def pixel_map(row, mode):

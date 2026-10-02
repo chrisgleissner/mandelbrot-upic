@@ -19,17 +19,20 @@ own attribution.
    color palette.
 3. Enable turbo at speed index 15 (64 MHz on Elite II / C64U, 48 MHz
    on an original Ultimate 64 / Elite I). `upic_select_display_path()`
-   measures which of the two it is and, on a 48 MHz machine, rebuilds
-   the renderer as its 48 MHz path, which shows 3 of every 4 pixels
-   (288 of 384 per line) at the same screen position (see
-   `docs/UPIC_VIEWER.md`). If the measurement never succeeds (turbo
-   stays off), it gives up after 256 probe loops (about 20 s at 1 MHz)
-   and keeps the 64 MHz path.
+   measures which of the two it is and has the Upic library generate
+   the matching line renderer: every pixel on its own dot at 64 MHz,
+   3 of every 4 pixels (288 of 384 per line) on the same dots at 48 MHz
+   (see `docs/UPIC_VIEWER.md`). If the measurement never succeeds
+   (turbo stays off), it gives up after 256 probe loops (about 20 s at
+   1 MHz) and keeps the 64 MHz renderer. Steps 2 and 3 are
+   `program_startup()`, in the startup-only `initcode` region; `main()`
+   then clears that region, which becomes picture columns 184-191.
 4. Generate the fractal (`mandelbrot_generate()`), showing it live as
    it builds.
-5. Loop forever: let the user browse/zoom/cycle the palette
-   (`zoom_select()`); regenerate at the newly selected view on a
-   confirmed zoom or pan.
+5. Loop forever: let the user browse/zoom/cycle the palette or save the
+   picture (`zoom_select()`); regenerate at the newly selected view on
+   a confirmed zoom or pan, push the new palette on `C`, write a `.upic`
+   file on `F1` (`save_picture()`).
 
 There is no exit -- see `docs/ZOOM_FEATURE.md` for why.
 
@@ -41,8 +44,13 @@ There is no exit -- see `docs/ZOOM_FEATURE.md` for why.
   escape-time iteration, quarter-square multiply, cardioid/bulb early
   skip, selectable color gradients). See
   `docs/MANDELBROT_ALGORITHM.md`.
-- **`include/upic_viewer.c`/`.h`** -- the Upic border-color raster
-  renderer. See `docs/UPIC_VIEWER.md`.
+- **`include/upic_viewer.c`/`.h`** -- thin layer over the library's
+  Upic display (path selection, one frame plus keyboard poll). See
+  `docs/UPIC_VIEWER.md`.
+- **`include/memmap.h`** -- every section and region (the picture's
+  split layout, the startup-only region, the `$E800` pool, the `$0200`
+  bss region), included first by `main.c`. See `docs/UPIC_VIEWER.md`'s
+  memory table.
 - **`include/zoom.c`/`.h`** -- interactive pan/zoom/palette-cycle
   control scheme, drawing corner markers directly into the picture
   buffer. See `docs/ZOOM_FEATURE.md`.
@@ -51,11 +59,11 @@ There is no exit -- see `docs/ZOOM_FEATURE.md` for why.
 - **`lib/ultimate-uci-oscar64/`** -- the Ultimate libraries, a git
   submodule of https://github.com/xahmol/ultimate-uci-oscar64 pinned to
   a release tag. This project uses `ultimate_common_lib` (UCI protocol:
-  palette control, device detection) and `ultimate_turbo_lib` (U64 CPU
-  speed control); see the library's `docs/UCILIB_MANUAL.md` and
-  `docs/TURBOCONTROL_MANUAL.md`. The 48/64 MHz speed probe is the
-  library's `uii_turbo_probe_max()`, called from
-  `upic_select_display_path()`.
+  palette control, device detection), `ultimate_turbo_lib` (U64 CPU
+  speed control and the 48/64 MHz speed probe), `ultimate_upic_lib`
+  (the Upic display and `.upic` saving) and `ultimate_dos_lib` (file
+  I/O); see the library's `docs/UCILIB_MANUAL.md`,
+  `docs/TURBOCONTROL_MANUAL.md` and `docs/UPIC_MANUAL.md`.
 
 ## Interrupts
 

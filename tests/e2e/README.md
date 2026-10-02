@@ -88,13 +88,13 @@ For each device:
 
 When one 48 MHz and one 64 MHz device take part, the run also
 cross-checks every 48 MHz capture against the 64 MHz capture of the
-same name. The two paths do not put a given picture pixel on the same
-dots, so the comparison goes through dot maps measured from the final
-"pattern" step (`geometry.py`): the pattern gives every pixel a
+same name. The 48 MHz path shows 3 of every 4 pixels (pixel 4m two
+dots wide), so the comparison goes through dot maps measured from the
+final "pattern" step (`geometry.py`): the pattern gives every pixel a
 different colour from its neighbours, so the captured row shows which
-picture pixel each dot displays. Dots showing pixels that the 64 MHz
-path puts beyond the right edge are skipped; border dots are compared
-directly.
+picture pixel each dot displays. Since v1.2.0 both paths have an exact
+pitch and fill all 384 dots; `tests/test_e2e_goldens.py` also checks the
+measured maps against that geometry.
 
 ## Steps
 
@@ -149,7 +149,7 @@ To update goldens after an intended change to the picture:
    goldens without hardware: every capture exists for both paths with
    the expected size and colour range, each 48 MHz golden matches its
    64 MHz golden through the pattern dot maps, the pattern goldens show
-   the pixels each path should show, and a comparison of two different
+   the exact geometry of each path, and a comparison of two different
    pictures fails (negative control).
 
 ## Adding a step

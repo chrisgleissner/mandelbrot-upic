@@ -2013,6 +2013,32 @@ byte-identical to the non-`-g` build.
   stack segment" is the separate error when `stacksize` is below the
   statically computed need. Bisect `stacksize` to find the minimum.
 
+### Two -O2 code-generation traps (ultimate-uci-oscar64 Upic module, 2026-10-02, Oscar64 1.32.273)
+
+Both found on real hardware; both checked in the `.asm` listing.
+
+- **An inlined function returning `(char *)(integer expression)` can be
+  folded to a null pointer.** A helper such as
+  `char *col(char c) { return (char *)(0x1000 + ((unsigned)c << 8)); }`
+  compiled at `-O2` to a constant 0 at every inlined call site -- with a
+  constant argument (`col(0)`, `col(16)`) and even with a runtime one --
+  in all six formulations tried (`(char *)BASE + ...`, `* 256`, via an
+  `unsigned` local, `unsigned` parameter). `-O1` and `-O0` were correct,
+  and a function returning `unsigned` instead of a pointer was correct.
+  A warning "nullptr dereferenced" at a use of the result is the hint.
+  In the Upic module `uii_upic_column(0)` became 0, so a file read wrote
+  its data over the zero page, including the CPU port `$01`: I/O was
+  switched off and the UCI "disappeared" (status register `$FF`).
+  **Fix: declare such a helper `__noinline`** -- a real call computed the
+  right address for every argument.
+- **A discarded `volatile` read can be dropped.**
+  `(void)*(volatile char *)0xdc0d;` (acknowledging a pending CIA1
+  interrupt) produced no `LDA $DC0D` at all. The unacknowledged interrupt
+  kept the IRQ line low, so after every `RTI` the CPU re-entered the
+  raster handler and the main program never ran. **Fix: do register
+  reads whose only purpose is the side effect in inline assembly**
+  (`__asm { lda $dc0d }`), or store the value somewhere.
+
 ### Memory layout for Oric Atmos
 
 ```c

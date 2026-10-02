@@ -25,8 +25,9 @@ needs. The model describes behaviour, not any particular implementation:
 - The CPU runs at 1 MHz for a few seconds after a reset, whatever $D031
   says. A test can switch this on up to a given sub-slot.
 
-The model is checked against real hardware in one place: the render
-delay bisection recorded in render_frame() (see test_turbo_modes.py).
+The model is checked against real hardware by test_turbo_modes.py: it
+must reproduce the exact pixel geometry measured on both paths from the
+VIC video stream (2026-10-02).
 
 Not modelled: CIA timing, sprite DMA, NTSC.
 """

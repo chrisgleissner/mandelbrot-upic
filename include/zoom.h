@@ -57,6 +57,7 @@ exit path).
 
 #define ZOOM_CONFIRMED       1
 #define ZOOM_PALETTE_CHANGED 2
+#define ZOOM_SAVE            3
 
 // Color index used for the corner markers -- no longer guaranteed
 // absent from the picture itself (mandel_color() can emit it too,
@@ -85,6 +86,11 @@ exit path).
 //                           state (if any) is preserved across this
 //                           round-trip -- resumes exactly where it
 //                           left off, no fractal recomputation.
+//   ZOOM_SAVE            -- user pressed F1: save the picture.
+//                           zoom_pending_palette names the current
+//                           gradient (for the file's palette). The
+//                           corner markers are already hidden, so they
+//                           aren't saved; box mode resumes afterwards.
 //
 // Call after mandelbrot_generate() returns (rombank_out()/uii_turbo_fast()
 // must already be active, same preconditions as upic_show_frame()).

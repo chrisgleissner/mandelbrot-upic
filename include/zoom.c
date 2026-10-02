@@ -138,20 +138,15 @@ static void zoom_out_view(void)
 // session).
 //
 // A marker is a SINGLE pixel of ZOOM_MARKER_COLOR_INDEX (zoom.h)
-// written straight into upic_buffer/upic_buffer_reloc, restored from a
+// written straight into the picture buffer, restored from a
 // 1-byte-per-marker backup before the next move so it doesn't leave a
 // permanent dot where it used to be.
 
-// One pixel's address in the packed picture buffer -- mirrors
-// mandelbrot_generate()'s own dst[] choice between upic_buffer_reloc
-// (columns 0..UPIC_RELOC_COLS-1) and upic_buffer (the rest), see its
-// own comment (mandelbrot.c) for why the split exists at all.
+// One pixel's address in the packed picture buffer: byte column
+// col / 2, via upic_column() (columns 0-7 live at $E000, see memmap.h).
 static volatile char *zoom_pixel_addr(int col, int row)
 {
-    unsigned bytecol = (unsigned)col >> 1;
-    if (bytecol < UPIC_RELOC_COLS)
-        return &upic_buffer_reloc[bytecol * UPIC_HEIGHT + (unsigned)row];
-    return &upic_buffer[(bytecol - UPIC_RELOC_COLS) * UPIC_HEIGHT + (unsigned)row];
+    return upic_column((char)((unsigned)col >> 1)) + (unsigned)row;
 }
 
 // Even column -> low nibble, odd column -> high nibble -- matches
@@ -352,6 +347,7 @@ static int ccol, crow;
 static int size_units;
 static unsigned char return_was_down = 0; // edge-detect confirm (RETURN)
 static unsigned char c_was_down = 0;      // edge-detect palette cycling ('C')
+static unsigned char f1_was_down = 0;     // edge-detect save (F1)
 static unsigned char z_was_down = 0;      // edge-detect box-mode toggle ('Z')
 static unsigned char o_was_down = 0;      // edge-detect zoom-out ('O')
 static unsigned char plus_was_down = 0;   // edge-detect grow ('+')
@@ -509,6 +505,26 @@ unsigned char zoom_select(void)
         else
         {
             c_was_down = 0;
+        }
+
+        // Save the picture (F1). Like 'C', main() does the work (UCI
+        // file I/O from main()'s own context, see zoom_pending_palette).
+        // Markers are hidden first so they don't end up in the file;
+        // in box mode the next zoom_markers_update() call draws them
+        // again when zoom_select() resumes.
+        if (key_pressed(KSCAN_F1))
+        {
+            if (!f1_was_down)
+            {
+                f1_was_down = 1;
+                zoom_markers_hide();
+                zoom_pending_palette = mandel_palettes[palette_index];
+                return ZOOM_SAVE;
+            }
+        }
+        else
+        {
+            f1_was_down = 0;
         }
 
         // Zoom OUT -- widens by one notch, clamped to the default
