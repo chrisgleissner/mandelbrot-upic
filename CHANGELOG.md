@@ -5,6 +5,13 @@
 One PRG for both turbo ceilings: Ultimate 64 Elite II / C64U (64 MHz)
 and original Ultimate 64 / Elite I (48 MHz).
 
+Contributed by **Christian Gleissner**
+([chrisgleissner](https://github.com/chrisgleissner),
+[pull request #2](https://github.com/xahmol/mandelbrot-upic/pull/2)):
+the 48 MHz display path and its startup speed probe, the UCI start-up
+hang fix, and the host-side and end-to-end test suites below. See
+`CREDITS.md`.
+
 - At startup, `upic_select_display_path()` (`upic_viewer.c`) times a
   fixed 64,764-cycle loop against the VIC-II raster counter: 16.3 PAL
   lines at 64 MHz, 21.9 at 48 MHz. It retries while the forced 1 MHz
