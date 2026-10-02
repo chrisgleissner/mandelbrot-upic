@@ -111,12 +111,20 @@ ULTUSB  ?= usb0
 ULTPATH  = /$(ULTUSB)/$(INSTALL_PATH)/
 ULTFTP1  = ftp://$(ULTIP1)$(ULTPATH)
 
+# Optional second Ultimate device (`make deploy2`). Its storage port can
+# differ from the first one's (e.g. SD on one machine, USB stick on the
+# other), so it gets its own override, defaulting to the same ULTUSB.
+ULTUSB2 ?= $(ULTUSB)
+ifdef ULTIP2
+ULTFTP2  = ftp://$(ULTIP2)/$(ULTUSB2)/$(INSTALL_PATH)/
+endif
+
 # Versioned release ZIP
 ZIPFILE  = build/$(MAIN)-$(VERSION).zip
 README   = README.pdf
 
 .SUFFIXES:
-.PHONY: all clean deploy check-deploy zip docs force48 test deploy-force48 e2e e2e-update
+.PHONY: all clean deploy check-deploy deploy2 check-deploy2 zip docs force48 test deploy-force48 e2e e2e-update
 
 all: $(TARGET) $(README) zip
 
@@ -180,7 +188,7 @@ zip: $(TARGET)
 
 # Safety check before deploy: make sure the Ultimate device is actually reachable
 check-deploy:
-	@curl -s --connect-timeout 3 $(ULTFTP1)/ >/dev/null 2>&1 || \
+	@curl -s --connect-timeout 3 ftp://$(ULTIP1)/ >/dev/null 2>&1 || \
 		(echo "ERROR: Cannot reach Ultimate device at $(ULTIP1) -- check ULTIP1 in .env" && false)
 
 deploy: check-deploy $(TARGET)
@@ -192,3 +200,14 @@ deploy: check-deploy $(TARGET)
 deploy-force48: check-deploy $(FORCE48)
 	wput -u $(FORCE48) $(ULTFTP1)$(MAIN)-force48.prg
 	wput -u $(CONFIGFILE) $(ULTFTP1)$(MAIN)-force48.cfg
+
+check-deploy2:
+ifndef ULTIP2
+	$(error ULTIP2 is not set -- add it to .env to use deploy2)
+endif
+	@curl -s --connect-timeout 3 ftp://$(ULTIP2)/ >/dev/null 2>&1 || \
+		(echo "ERROR: Cannot reach Ultimate device at $(ULTIP2) -- check ULTIP2 in .env" && false)
+
+deploy2: check-deploy2 $(TARGET)
+	wput -u $(TARGET) $(ULTFTP2)$(MAIN).prg
+	wput -u $(CONFIGFILE) $(ULTFTP2)$(MAIN).cfg
