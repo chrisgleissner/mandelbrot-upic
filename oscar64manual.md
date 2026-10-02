@@ -1827,6 +1827,49 @@ targets.
 
 Screen RAM: $BB80, 40×28, serial attributes at (byte & 0x60)==0. INK attr at col 0, PAPER attr at col 1 of each row. Characters 0x20–0x7F (note: $20 IS a character, not an attribute — unlike bit-6-based checks in older documentation). Overlay RAM $C000–$FFFF via MICRODISCCFG ($0314) = $FD; requires LOCI device; not testable in Oricutron.
 
+### Patching code by label, and inline-asm result handling (mandelbrot-upic, 2026-09-21)
+
+Findings from the 48 MHz support in `upic_viewer.c`, all checked in
+the `-g` `.asm` listing. `-g` does not change the PRG: the output was
+byte-identical to the non-`-g` build.
+
+- **Labels inside a named asm block are addressable from other code.**
+  With `__asm render_frame { ... dly: ldx #$87 ... rts }`, another
+  function's inline asm can write `sta render_frame.dly + 1` to patch
+  the immediate operand. This is the same `block.label` form `crt.c`
+  uses (`divmod.DM8`, `startup.exec`). This does not work for labels
+  inside a plain C function's inline `__asm { }`, so a routine whose
+  operands are patched has to become a named block.
+  - Converting a C function that held only an inline asm body into a
+    named block emitted the same bytes, once a trailing `rts` was
+    added by hand.
+  - Callers use `__asm { jsr render_frame }`.
+  - Converting it can change the order of objects in the region;
+    `render_frame` moved after `render_line_pixels`. Recheck the
+    `.map`, and check that any timing-critical branch still doesn't
+    cross a page.
+- **Taking a function's address as a data pointer:**
+  `(char *)(unsigned)fn` works. `(char *)fn` and `(char *)(void *)fn`
+  both fail with error 3012, "Cannot assign incompatible types".
+- **An inline asm loop wrapped in C control flow can be duplicated.**
+  A `for (;;) { __asm { ...; sta static_var } if (static_var ...) break; }`
+  compiled into three copies of the asm body, one for each loop state.
+  The first copy read `static_var` before any asm had written it.
+  Moving the whole loop, including its exit test, into a single
+  `__asm { }` block produced exactly one copy. Keep loops whose body
+  is inline asm entirely in asm.
+- **A static written only by asm and read by C stays a real load**,
+  even when it has a C initializer (`static unsigned char x = 2;`):
+  `lda x / bne` was emitted, not constant-folded. The initializer
+  replaced an asm `lda #2 / sta x` and saved 5 bytes.
+- **"Cannot place stack section" / "Cannot place heap section"**
+  means the default region (`main`) overflowed, not that the stack is
+  too small. To measure by how much, build a scratch copy with the
+  region widened (and any region above it moved up) and compare
+  `BSSEnd` with the original stack start. "Static stack usage exceeds
+  stack segment" is the separate error when `stacksize` is below the
+  statically computed need. Bisect `stacksize` to find the minimum.
+
 ### `va_arg` is broken in native mode (`-n`)
 
 Oscar64's `stdarg.h` defines `va_arg` as:

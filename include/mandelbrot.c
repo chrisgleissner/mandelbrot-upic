@@ -446,6 +446,7 @@ void mandelbrot_generate(void)
     unsigned bytecol, y;
     unsigned char symmetric;
     unsigned half_height;
+    unsigned work, work_per_frame;
 
     // Live build-up via upic_show_frame() once per column, tried
     // 2026-09-09, REVERTED same day: confirmed on real hardware as
@@ -499,8 +500,25 @@ void mandelbrot_generate(void)
     // this (2026-09-10) -- most interesting zoom targets don't happen
     // to straddle the real axis. Checked at runtime rather than
     // assumed, so both cases stay correct through repeated zooms.
-    symmetric = (mandel_y0 == (fixed_t)(-(((long)(UPIC_HEIGHT - 1) * mandel_dy) / 2)));
+    //
+    // Unsigned 16-bit shift rather than the earlier signed
+    // `(long)(UPIC_HEIGHT - 1) * mandel_dy / 2` (2026-09-28): that one
+    // division was the only caller of Oscar64's divs32/divmod32 runtime
+    // (about 310 bytes of the full "main" region). mandel_dy is always
+    // 1..16 (zoom.c clamps it to at least 1 and never past the default
+    // overview's 16), so 255 * mandel_dy fits 16 bits and is positive,
+    // where the shift rounds down exactly as the division truncated.
+    symmetric = (mandel_y0 == -(fixed_t)(((unsigned)(UPIC_HEIGHT - 1) * (unsigned)mandel_dy) >> 1));
     half_height = symmetric ? (UPIC_HEIGHT / 2) : UPIC_HEIGHT;
+
+    // Live frames are paced by work done, in quarter rows: every row
+    // adds 4 and a frame is shown each time the total reaches
+    // upic_frame_quarters columns' worth. On the 64 MHz path that is
+    // exactly one frame at the end of every column, as before; the
+    // 48 MHz path shows one every 3/4 column, so both machines show the
+    // picture for the same share of the time (see upic_viewer.h).
+    work = 0;
+    work_per_frame = half_height * upic_frame_quarters;
 
     // cy^2 depends only on the row, not the column -- precompute it
     // once here instead of leaving mandel_in_cardioid_or_bulb() (via
@@ -550,14 +568,20 @@ void mandelbrot_generate(void)
             dst[y] = packed;
             if (symmetric)
                 dst[UPIC_HEIGHT - 1 - y] = packed;
-        }
 
-        // Live picture build-up -- see this function's own comment
-        // above. Return value ignored here on purpose: SPACE exits the
-        // FINAL display loop in main() (after this function returns),
-        // not generation itself -- a SPACE press mid-generation is
-        // just consumed/ignored by this call, same as any other key.
-        upic_show_frame();
+            // Live picture build-up -- see this function's own comment
+            // above, and `work` above for the pacing. Return value
+            // ignored here on purpose: SPACE exits the FINAL display loop
+            // in main() (after this function returns), not generation
+            // itself -- a SPACE press mid-generation is just
+            // consumed/ignored by this call, same as any other key.
+            work += 4;
+            if (work >= work_per_frame)
+            {
+                work -= work_per_frame;
+                upic_show_frame();
+            }
+        }
     }
 
     mandel_gen_tenths = cia1.todt;

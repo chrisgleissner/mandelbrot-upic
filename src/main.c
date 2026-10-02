@@ -83,6 +83,16 @@ int main(void)
 	// escape-time iteration itself, which is by far the slow part.
 	turbo_fast();
 
+	// One PRG for both turbo ceilings (2026-09-21): an Elite II / C64U
+	// reaches 64 MHz at speed index 15, an Ultimate 64 / Elite I only 48
+	// MHz. The Upic renderer's timing is built for 64 MHz, so a 48 MHz
+	// machine gets a patched half-horizontal-resolution path -- see
+	// upic_select_display_path() in upic_viewer.c. `make force48` builds
+	// a test-only PRG that always takes that path (at 48 MHz), so it can
+	// be checked on a 64 MHz machine; a startup key for this did not fit
+	// in "main" (see upic_viewer.c's region comment).
+	upic_select_display_path();
+
 	mandelbrot_generate();
 
 	// Let the user pick a zoom target on the completed picture
