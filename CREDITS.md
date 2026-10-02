@@ -96,6 +96,18 @@ markers. See `mandel_color_table[]`'s own comment in
 section for the full writeup, including the marker-visibility tradeoff
 this brings back.
 
+## 48 MHz Ultimate 64 / Elite I support (v1.1.0)
+
+**Christian Gleissner** ([chrisgleissner](https://github.com/chrisgleissner),
+[pull request #2](https://github.com/xahmol/mandelbrot-upic/pull/2))
+contributed the 48 MHz display path for the original Ultimate 64 /
+Elite I, including the startup speed probe that picks the path from
+the same PRG (`upic_select_display_path()` in
+`include/upic_viewer.c`), the fix for a startup hang in the UCI
+library's command handshake (`include/ultimate_common_lib.c`), the
+host-side cycle-counting 6502 test suite (`tests/`) and the end-to-end
+test on real hardware with golden images (`tests/e2e/`).
+
 ## Toolchain
 
 [Oscar64](https://github.com/drmortalwombat/oscar64), a C99/C++

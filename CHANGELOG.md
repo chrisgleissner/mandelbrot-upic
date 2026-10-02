@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.1.0]
 
 One PRG for both turbo ceilings: Ultimate 64 Elite II / C64U (64 MHz)
 and original Ultimate 64 / Elite I (48 MHz).
@@ -71,6 +71,13 @@ and original Ultimate 64 / Elite I (48 MHz).
   code does not fit the default `main` code region at `stacksize` 80.
   The change frees about 400 bytes there: `stacksize` stays at 80 and
   the region has 323 bytes free.
+- `make deploy2` deploys to an optional second Ultimate device
+  (`ULTIP2` in `.env`, storage port `ULTUSB2`, defaulting to `ULTUSB`).
+  The deploy reachability checks now probe the device's FTP root, so a
+  device without the install directory yet is no longer reported as
+  unreachable.
+- `make e2e` recognises the product name `Ultimate 64-II`, which
+  firmware 3.15a reports for an Ultimate 64 Elite II.
 
 ## [1.0.3]
 

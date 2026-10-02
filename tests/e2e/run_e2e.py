@@ -50,6 +50,7 @@ PRODUCTS = {
     "Ultimate 64": "48mhz",
     "Ultimate 64 Elite": "48mhz",
     "Ultimate 64 Elite II": "64mhz",
+    "Ultimate 64-II": "64mhz",  # how firmware 3.15a reports an Elite II
     "C64 Ultimate": "64mhz",
 }
 PROBE_CLASS = {"48mhz": 0, "64mhz": 1}

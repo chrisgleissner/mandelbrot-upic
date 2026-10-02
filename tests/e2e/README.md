@@ -18,8 +18,8 @@ in parallel takes about 2.5 minutes. Python 3 standard library only.
   (`PUT /v1/streams/video:start`). Firmware 3.15 on an Ultimate 64
   Elite and 1.2RC on a C64 Ultimate were used to create the goldens.
 - Supported products (from `GET /v1/info`): Ultimate 64 and Ultimate
-  64 Elite (48 MHz path), Ultimate 64 Elite II and C64 Ultimate
-  (64 MHz path). Any other product fails with "unsupported product".
+  64 Elite (48 MHz path), Ultimate 64 Elite II (reported as
+  `Ultimate 64-II` by firmware 3.15a) and C64 Ultimate (64 MHz path). Any other product fails with "unsupported product".
 - The host must be on the same LAN as the devices and must receive
   multicast UDP. The video stream is sent to multicast group
   `239.0.1.64`. Each device gets its own UDP port (11000 for the first
