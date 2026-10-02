@@ -703,6 +703,65 @@ hardware. Applied in UBoot64-v2 as `uboot64_reu_count_pages()` in
 `reu_count_pages()`, since the library function itself can't be patched from
 project source).
 
+**Third instance, wider scope (DMBoot v5, 2026-09-26): not only probes.**
+Any code whose reads of DMA-loaded data can be scheduled across an inlined
+`reu_load` is affected. A project wrapper `reu128_load()` (1 MHz switch +
+`reu_load`) was auto-inlined at `-O2` into a linked-list walk:
+`struct DirMeta meta; reu128_load(addr, (volatile char *)&meta, sizeof meta);
+target = meta.next;` compiled to reading `meta.next`/`meta.prev` **once,
+before the loop and before the DMA** (seen in the `.asm`: `LDA meta.next`
+hoisted above the `$DF01` write). The walk followed stale links and the
+browser hung on cursor down; the inlined `reu_store` of a link address
+likewise risked storing memory the compiler had not written yet. **Fix:
+declare the project's REU load/store wrappers `__noinline`** (in the header
+prototype and the definition). The call is then opaque and the reads follow
+the `JSR` (verified in the `.asm`). Rule: never let `reu_load`/`reu_store`
+be inlined into code that uses the transferred data; wrap them once in
+`__noinline` functions and use only those.
+
+**`__noinline` alone does not make the call opaque (UBoot64-v2, 2026-09-28,
+Oscar64 1.32.273).** The optimizer still analyses the body of a
+non-inlined function: a wrapper that only calls the inline `reu_load` is
+seen as writing nothing but the REU registers, not the buffer. In a
+load-modify-store sequence (`store(a, &m); load(b, &m); m.next = x;
+store(b, &m);`) the `.asm` wrote `m.next` byte 0 *before* the first store
+and the load; the DMA then overwrote it and the first store wrote a wrong
+link. **Fix: a barrier access in the wrapper** that makes the buffer access
+visible — `dp[0] = dp[0];` after `reu_load` (the call "writes" the buffer),
+`volatile char barrier = sp[0];` before `reu_store` (the call "reads" it).
+With the barrier all bytes of `m.next` were written after the load and
+before the store (verified in the `.asm`). The optimizer treated the
+one-byte access as touching the whole object.
+
+**Follow-up trap of the `__noinline` fix (DMBoot v5, 2026-09-26, Oscar64
+1.32.273 at both f38a1f2 and 546b627): register-parameter tracking across
+calls in a loop.** With the REU wrappers no longer inlined, the size probe
+loop `reu128_store(page << 16, ...); reu128_store(0, ...); reu128_load(page << 16, ...)`
+compiled to: loop top `STY P2` (address byte 2 = page), then for the call
+with address 0 only `STA P3` (byte 3 = 0) — P2 was left at the page, as if
+the compiler still knew the pre-loop value 0 in P2. The "reset" marker went
+to the probed page and every REU read as 64 KB. Not cured by: a `volatile
+unsigned long origin = 0` local (folded to the constant anyway), a separate
+`__noinline` helper for the address-0 write (the caller then assumed P2
+survived the helper, whose tail-jumped `@proxy` sets it), or `#pragma
+optimize(noconstparams)` around the callee (proxies still generated).
+**Fix used:** in that one probe function call Oscar64's inline
+`reu_store`/`reu_load` directly (no register parameters at all), keep the
+`__noinline` wrappers everywhere else. Watch for the pattern: a loop that
+calls the same function with a multi-byte parameter that changes only in
+some bytes, and a constant that equals the value those bytes had before the
+loop. Check the `.asm` for every `P0`-`P3` store before such calls.
+
+**Oscar64 546b627 (2026-09-26) regression, not isolated:** built with the
+latest main (29 commits after f38a1f2), DMBoot v5's 80 column start-up
+console scrolled wrongly on hardware (earlier lines lost, a line cut off);
+the same source built with f38a1f2 was fine. About 100 functions compiled
+differently; the ones checked by hand (`vdc_hchar`, `dwin_cursor_newline`)
+were equivalent. DMBoot now builds with the official release tag v1.32.273
+(`git checkout v1.32.273` in `~/oscar64`, then `make compiler` in `make/`),
+not with main. Before adopting a new Oscar64 in a project,
+re-test on hardware; keep the previous binary to compare (`make CC=...`).
+
 **Second confirmed instance (heartbeat-demo, 2026-07-29):** same exact bug,
 same Oscar64 build. detect_reu() (src/detect.c) called the library's
 reu_count_pages() directly and always got 0 (REU check failed on real
@@ -1077,6 +1136,77 @@ void     bnk1_writem(void *dst, const void *src, unsigned len);
 ```
 
 ---
+
+### C128 gotchas (found in DMBoot v5 Phase 0, 2026-09-25)
+
+- **`kbhit()` is wrong on the C128.** `conio.c`'s `kbhit()` reads `$C6`, the
+  C64 keyboard buffer count. On the C128 the count is at `$D0` (buffer at
+  `$034A`). Poll with KERNAL `GETIN` instead:
+  `char key_poll(void) { return __asm { jsr $ffe4 \n sta accu }; }`
+  (`\n` here means a line break: each instruction must be on its own
+  source line; a literal `\n` in a one-line `__asm` block is a syntax error,
+  "End of line expected")
+  (`getchx()` also uses GETIN but applies the `giocharmap` conversion).
+- **Do not name a function `startup`.** `crt.c` already defines `startup`;
+  a user function with that name gives "error 3023: Duplicate definition
+  'startup'" (and the compiler may segfault right after).
+- **`petscii.h` + `printf` is fine.** With the global charmap from
+  `petscii.h`, format specifiers become PETSCII too (`%u` -> `%U`); Oscar64's
+  `printf` accepts both (`case p'u'`, `p's'`, `p'd'`, ...). Still print
+  `CHR$(14)` (`putrch(14)`) once to switch to the lower/upper case charset.
+- **`c128e` overlays (VDCSE pattern):** `#pragma overlay(name, N)` with a
+  region per overlay writes `build/name.prg` next to the main output, load
+  address = region start. The LMC (`#pragma overlay(xxxlmc, 1)`, region
+  `$1300-$1B00`) only contains functions that are actually referenced.
+- **Empty "release" macros must still evaluate their arguments.** A
+  debug hook like `#define tm_set_x(v)` (empty) silently removes a call
+  passed as its argument (`tm_set_x(overlay_fn())` compiles to nothing).
+  Use `#define tm_set_x(v) ((void)(v))`.
+- **Hardware testing via Ultimate REST memory access (c64bridge):** the
+  Ultimate reads/writes C128 memory with DMA. The C128 crashes (BRK into the
+  monitor, PC inside the Device Manager ROM) when this happens while it runs
+  at 2 MHz. Only access memory over REST while the C128 is at 1 MHz; the
+  same rule as REU DMA (wrap `reu_load`/`reu_store` in a 1 MHz switch via
+  `$D030` bit 0).
+- **Returning to BASIC 7 leaves BASIC's zero page corrupted.** Oscar64's
+  default zero page (`MachineTypes.cpp`) is `$02-$26` (registers),
+  `$43-$62` (`T*` temporaries) and `$F7-$FF` (auto zero page). On the C128
+  this overlaps BASIC 7 work storage that `RUN` does not reinitialise, for
+  example the function dispatch `JMP` near `$54-$56` (Oscar64 keeps T1/T2 at
+  `$53-$55`). `crt.c` `spexit` only resets `$13/$16/$18/$1A/$54`, and
+  `exit()` only `$54/$13`. Symptom: after exiting, a BASIC program that uses
+  variables or string functions (`A=1`, `CHR$(14)`) crashes with BREAK,
+  PC `$1005B`. Fix: copy those three ranges to a buffer as the first
+  statement of `main()` (only `ip $19-$1A` and `sp $23-$24` were changed
+  before it), and restore them in an assembler exit routine
+  (`ldx spentry; txs`, copy back, then `$13=0, $1A=0, $18=$1B, $16=$19`,
+  `rts`). cc65's C128 runtime does the same with its own zero page.
+- **C128 function keys return their strings, not key codes.** The screen
+  editor expands F1-F8/HELP (F7 = `LIST` + RETURN) before `GETIN` sees
+  them. Set the key store vector `$033C` to `$C6B7` (past the expansion;
+  as cc65 `libsrc/c128/cgetc.s`) and restore the saved value on exit.
+- **A global written inside an `__asm` block can be "forgotten".** In
+  `x = param; __asm { lda x \n jsr ... \n sta x } return x;` the compiler
+  returns the parameter it still holds in a register (`T0`), not the value
+  the assembler stored. A `*(volatile char *)&x` read-back is also folded
+  away. Declare the variable itself `volatile` (or return via `accu` from
+  the assembler). Found in DMBoot's Device Manager drive type call.
+- **Code used only through its address is dropped, and the address becomes 0.**
+  `__asm entry { ... }` whose only use is `(unsigned)entry` (for a BASIC
+  `SYS`) was removed by the linker, and `sprintf("sys %u", (unsigned)entry)`
+  compiled to a constant 0. A C function with an `__asm` body plus
+  `#pragma reference(entry)` keeps the code, but the C expression
+  `(unsigned)entry` was still folded to 0, even through a `volatile`
+  function pointer (which was optimised away too). What works: take the
+  address in assembler,
+  `unsigned entry_address(void) { return __asm { lda #<entry \n sta accu \n lda #>entry \n sta accu + 1 }; }`
+  (one instruction per source line, see above).
+  Always check such addresses in the generated `.asm`. Found in DMBoot's
+  C64-mode `SYS` entry (it typed `SYS 0`).
+- **An `__asm name { ... }` function cannot also have a C prototype.**
+  Declaring `void name(void);` in a header gives "error 3023: Duplicate
+  definition". To call assembler from C, write a normal function whose body
+  is an `__asm { ... }` block (no `rts`).
 
 ## PLUS4 Libraries (`include/plus4/`)
 
@@ -1538,6 +1668,32 @@ into a third tier both entries call through. Costs a repeated block of
 identical save/restore instructions, but keeps each entry point at the
 same two-tier distance from the `__interrupt` worker that compiles.
 
+**Follow-on gotcha (Land of Ice and Fire, 2026-09-13): a plain C
+function calling that duplicated `__asm` block via `jsr` reintroduces
+the SAME error, even though it's not another named-`__asm` entry.**
+Needed the cooperative tick handler above to be callable from other
+*files*, not just other places in the same file — but a named `__asm`
+function can't have a separate C prototype at all (see the entry
+below, "Duplicate definition"), so it isn't visible for calling across
+translation units, only from within the same file it's defined in.
+The natural-looking fix — wrap it in an ordinary C function so it gets
+a normal, cross-file-callable prototype (`void modplay_poll_tick(void)
+{ __asm { jsr modplay_poll_tick_asm } }`) — adds exactly the "third
+tier in front of the `__interrupt` worker" the gotcha above warns
+about (`modplay_poll_tick → jsr modplay_poll_tick_asm → jsr
+modplay_tick`), and trips the identical `error 3035` on `modplay_tick`,
+even though the wrapper is a normal function, not another `__asm`
+entry point. **Fix**: don't call a separately-named `__asm` block from
+the wrapper at all — put the ENTIRE save-gaps/`jsr worker`/restore-gaps
+sequence directly inside the plain C function's own single inline
+`__asm { ... }` body instead (`void modplay_poll_tick(void) { __asm {
+lda $dc0d ... jsr modplay_tick ... } }`, no separately-named `__asm`
+function in between). This keeps the exact same one-`jsr`-hop distance
+in front of the `__interrupt` worker as the original IRQ entry had,
+while still producing an ordinary, prototype-able, cross-file-callable
+C function. Confirmed: this compiles clean where both other forms hit
+`error 3035`.
+
 ### D64 disk image
 ```
 oscar64 main.c -d64=output.d64 -fz=resource.bin -f=uncompressed.bin
@@ -1814,19 +1970,6 @@ targets.
 
 `__asm funcname { }` defines a function named `funcname`. If a C prototype `void funcname(void);` also exists, Oscar64 raises "Duplicate definition". Remove the prototype — named asm functions are directly callable from C without a prototype (the symbol is visible in the same translation unit).
 
-### Memory layout for Oric Atmos
-
-```c
-// Stack: 512 bytes just below screen RAM ($BB80)
-#pragma stacksize(0x0200)
-#pragma region(stack, 0xB980, 0xBB80, , , {stack})
-
-// Main program: $0500–$B980 (~46 KB, code+data+bss+heap)
-#pragma region(main, 0x0500, 0xB980, , , {code, data, bss, heap})
-```
-
-Screen RAM: $BB80, 40×28, serial attributes at (byte & 0x60)==0. INK attr at col 0, PAPER attr at col 1 of each row. Characters 0x20–0x7F (note: $20 IS a character, not an attribute — unlike bit-6-based checks in older documentation). Overlay RAM $C000–$FFFF via MICRODISCCFG ($0314) = $FD; requires LOCI device; not testable in Oricutron.
-
 ### Patching code by label, and inline-asm result handling (mandelbrot-upic, 2026-09-21)
 
 Findings from the 48 MHz support in `upic_viewer.c`, all checked in
@@ -1869,6 +2012,19 @@ byte-identical to the non-`-g` build.
   `BSSEnd` with the original stack start. "Static stack usage exceeds
   stack segment" is the separate error when `stacksize` is below the
   statically computed need. Bisect `stacksize` to find the minimum.
+
+### Memory layout for Oric Atmos
+
+```c
+// Stack: 512 bytes just below screen RAM ($BB80)
+#pragma stacksize(0x0200)
+#pragma region(stack, 0xB980, 0xBB80, , , {stack})
+
+// Main program: $0500–$B980 (~46 KB, code+data+bss+heap)
+#pragma region(main, 0x0500, 0xB980, , , {code, data, bss, heap})
+```
+
+Screen RAM: $BB80, 40×28, serial attributes at (byte & 0x60)==0. INK attr at col 0, PAPER attr at col 1 of each row. Characters 0x20–0x7F (note: $20 IS a character, not an attribute — unlike bit-6-based checks in older documentation). Overlay RAM $C000–$FFFF via MICRODISCCFG ($0314) = $FD; requires LOCI device; not testable in Oricutron.
 
 ### `va_arg` is broken in native mode (`-n`)
 

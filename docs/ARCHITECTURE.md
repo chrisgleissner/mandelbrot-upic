@@ -3,7 +3,8 @@
 ## What this is
 
 An Ultimate 64 demo that generates a Mandelbrot fractal
-on-device at 64 MHz turbo, packs it directly into Upic format (a
+on-device at 64 MHz turbo (48 MHz on an original Ultimate 64 / Elite I,
+detected at startup -- see `UPIC_VIEWER.md`), packs it directly into Upic format (a
 16-color, 384x256 border-color raster picture technique), displays it
 live as it renders, and lets the user interactively pan and zoom into
 any region of the result. See `CREDITS.md` for the Upic technique's
@@ -48,9 +49,9 @@ There is no exit -- see `docs/ZOOM_FEATURE.md` for why.
 - **`include/rombank.c`/`.h`** -- permanent ROM-banking setup shared by
   every module that needs it.
 - **`include/turbo.c`/`.h`** -- Ultimate 64 CPU speed control. See
-  `TURBOCONTROLMANUAL.md`.
+  `TURBOCONTROL_MANUAL.md`.
 - **`include/ultimate_common_lib.c`/`.h`** -- UCI protocol (palette
-  control, device detection). See `UCILIBMANUAL.md`.
+  control, device detection). See `UCILIB_MANUAL.md`.
 
 ## Interrupts
 

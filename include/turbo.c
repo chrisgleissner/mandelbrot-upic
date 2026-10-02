@@ -41,7 +41,7 @@ __noinline int benchmark_delay(int iters)
 // turbo_detect
 //
 // Measures CPU speed via CIA1 TOD timing using benchmark_delay().
-// See turbo.h for threshold definitions and TURBOCONTROLMANUAL.md
+// See turbo.h for threshold definitions and docs/TURBOCONTROL_MANUAL.md
 // for a full explanation of the detection method.
 // ---------------------------------------------------------------
 char turbo_detect(void)

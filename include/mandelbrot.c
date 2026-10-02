@@ -109,7 +109,7 @@ static inline unsigned qmul8u(unsigned char a, unsigned char b)
 // research pass -- see CREDITS.md) to a documented, currently-open
 // Oscar64 whole-program `-O2` register-allocator bug class (upstream
 // issues #318/#361 on drmortalwombat/oscar64) -- and this project's OWN
-// Oscar64 reference (oscar64manual.md) independently documents THREE
+// Oscar64 reference (docs/OSCAR64_MANUAL.md) independently documents THREE
 // separate instances of this exact bug class found in other projects.
 // Reverted to lmul16s()/lmul16u() (fixmath.h), which avoid it by being
 // ONE flat __native asm function each -- no nested C calls at all.

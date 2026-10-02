@@ -50,7 +50,7 @@ hang fix, and the host-side and end-to-end test suites below. See
   waits until the command has been taken, and the wait for idle
   releases an orphaned reply. After the fix no start hung in 30 starts
   on the Ultimate 64 Elite and 20 on the C64 Ultimate. See
-  `UCILIBMANUAL.md`.
+  `docs/UCILIB_MANUAL.md`.
 - `make force48` builds a test-only PRG that always takes the 48 MHz
   path at speed index 14 (48 MHz on Elite II / C64U), so the path can
   be checked on a 64 MHz machine.
@@ -85,6 +85,14 @@ hang fix, and the host-side and end-to-end test suites below. See
   unreachable.
 - `make e2e` recognises the product name `Ultimate 64-II`, which
   firmware 3.15a reports for an Ultimate 64 Elite II.
+- Documentation: the root-level manuals moved into `docs/` with
+  upper-case names (`docs/OSCAR64_MANUAL.md`, `docs/UCILIB_MANUAL.md`,
+  `docs/TURBOCONTROL_MANUAL.md`); the Oscar64 manual is refreshed from
+  the maintainer's canonical copy. Supported-hardware statements updated
+  for the Elite I, and `tests/e2e/README.md` describes running the e2e
+  test from WSL2. Verified with `make e2e` on an Ultimate 64 Elite II
+  and an Ultimate 64 Elite (firmware 3.15a): every capture matched its
+  golden image and the 48 MHz pictures matched the 64 MHz ones.
 
 ## [1.0.3]
 

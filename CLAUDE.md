@@ -12,8 +12,10 @@ section), packs it directly into Upic format (a 16-color, 384x256 border-color r
 technique), displays it live as it renders, and lets the user
 interactively pan and zoom into any region of the result. Targets
 **Ultimate firmware 3.15 or newer only** (no fallback path for older
-firmware) -- in practice this means an Ultimate 64 Elite 2 for now,
-since the corresponding C64U firmware hasn't been released yet.
+firmware). Confirmed on an Ultimate 64 Elite II (64 MHz path) and an
+Ultimate 64 Elite (48 MHz path), both firmware 3.15a; a C64 Ultimate on
+firmware 1.2RC was tested by PR #2's author (see `README.md`'s known
+open point about the `.cfg`'s turbo setting name there).
 
 **Status**: v1.1.0, feature-complete. See `README.md` for controls and
 installation, `docs/ARCHITECTURE.md` for the project layout,
@@ -26,7 +28,7 @@ See `CREDITS.md` for full attribution.
 `~/.claude/CLAUDE.md`'s Oscar64 section for detail)
 
 **Oscar64**, a C99/C++ cross-compiler targeting 6502/C64 — see
-`oscar64manual.md` (canonical copy) before re-researching compiler
+`docs/OSCAR64_MANUAL.md` (project copy of the canonical manual) before re-researching compiler
 behavior.
 
 - `make` / `make all` — compiles to `build/mandelupic.prg`,
@@ -48,7 +50,7 @@ behavior.
 - **UCI cartridge-side auto-enable**: `uii_wait_for_uci()` in
   `include/ultimate_common_lib.c` sends the unlock sequence when the
   UCI isn't already mapped (sending it while the UCI is mapped caused
-  a start-up hang -- see `UCILIBMANUAL.md`). On an Ultimate 64 Elite
+  a start-up hang -- see `docs/UCILIB_MANUAL.md`). On an Ultimate 64 Elite
   (firmware 3.15) the unlock did not bring the UCI up with "Command
   Interface" disabled, so the palette is not pushed there;
   `config/MandelbrotUpic-U64E2.cfg` enables the interface, alongside
@@ -59,7 +61,7 @@ behavior.
   `SET_PALETTE_COLOR`/`RESET_PALETTE`) — this is how the generated
   fractal's palette gets pushed to real hardware colors.
 
-Full protocol reference: `UCILIBMANUAL.md`. Since this demo requires
+Full protocol reference: `docs/UCILIB_MANUAL.md`. Since this demo requires
 firmware 3.15+ unconditionally, there's no need to guard these calls
 behind a version/capability check.
 

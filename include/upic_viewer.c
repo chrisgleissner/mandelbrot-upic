@@ -1242,7 +1242,7 @@ unsigned char upic_frame_quarters = 4;
 // asm block writing a file-scope static, not C control flow around a
 // shorter asm block: written that way Oscar64 duplicated the asm body
 // three times and read the result before the loop (checked in the
-// -g .asm listing), the inline-asm hazard oscar64manual.md describes.
+// -g .asm listing), the inline-asm hazard docs/OSCAR64_MANUAL.md describes.
 // Starts at 2 (no valid result yet) as initialized data rather than
 // an asm store, which saved 5 bytes of the "main" region.
 static unsigned char upic_probe_class = 2;
@@ -1492,7 +1492,7 @@ void upic_restore_display(void)
 // normally if a future build actually calls one) -- heapsize/heap are
 // kept declared here, tiny, as a defensive default for that case. Must
 // stay in this main region's own section list or malloc() silently
-// returns NULL (see oscar64manual.md's heap-placement gotcha) -- this
+// returns NULL (see docs/OSCAR64_MANUAL.md's heap-placement gotcha) -- this
 // project already has its own custom #pragma region(main, ...) below,
 // so this is the safe case that gotcha describes, not the risky one.
 // Shrunk 32 -> 8 (2026-09-11): "main" ran short by ~11 bytes once

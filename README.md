@@ -20,7 +20,8 @@ Ultimate running the same PRG (see `make e2e` under
 See `CREDITS.md` for full attribution.
 
 **Status**: v1.1.0, feature-complete and confirmed working on real
-Ultimate 64 hardware (firmware 3.15 and 3.15a).
+hardware: an Ultimate 64 Elite II (64 MHz path) and an Ultimate 64
+Elite (48 MHz path), both on firmware 3.15a.
 
 **[Watch it in action](https://www.youtube.com/watch?v=fWSM7ikNegw)**
 -- real-hardware capture: live generation, all 4 palettes, and
@@ -93,11 +94,14 @@ with no graceful exit path. See `docs/ZOOM_FEATURE.md` for why.
 
 ## Installation
 
-Requires **firmware 3.15 or newer**. As of this release, that means an
-**Ultimate 64 Elite 2** in practice -- the Commodore 64 Ultimate (C64U),
-a separate product built on the Elite 2 design with some different
-hardware choices and its own firmware branch, doesn't yet have the
-corresponding firmware release.
+Requires **firmware 3.15 or newer** on an **Ultimate 64**, **Ultimate
+64 Elite** or **Ultimate 64 Elite II**. The Elite II runs at 64 MHz and
+shows the full picture; the original Ultimate 64 and the Elite top out
+at 48 MHz and use the 48 MHz display path described above. The
+Commodore 64 Ultimate (C64U), built on the Elite II design with its own
+firmware branch, ran the same PRG on firmware 1.2RC (a release
+candidate) in the 48 MHz work's own testing -- see the known open point
+below.
 
 1. Copy both `mandelupic.prg` and `mandelupic.cfg` onto your Ultimate's
    SD card or USB storage, in the same folder -- extracting the
@@ -110,7 +114,7 @@ The Ultimate's own firmware auto-loads a config file that shares its
 base name with the program being run -- `mandelupic.cfg` next to
 `mandelupic.prg` is picked up automatically, no manual "load config"
 step needed. It enables the Command Interface (UCI) and U64 turbo
-registers this demo needs (for an Ultimate 64 Elite 2 board); if your
+registers this demo needs (using the Ultimate 64 setting names); if your
 own configuration already has both enabled, this has no effect either
 way.
 
@@ -164,7 +168,9 @@ cp .env.example .env
 | [`docs/MANDELBROT_ALGORITHM.md`](docs/MANDELBROT_ALGORITHM.md) | Fixed-point fractal generation algorithm |
 | [`docs/UPIC_VIEWER.md`](docs/UPIC_VIEWER.md) | The Upic border-color raster display technique |
 | [`docs/ZOOM_FEATURE.md`](docs/ZOOM_FEATURE.md) | Interactive pan/zoom/palette control scheme |
-| [`TURBOCONTROLMANUAL.md`](TURBOCONTROLMANUAL.md) | Ultimate 64 CPU speed control library |
-| [`UCILIBMANUAL.md`](UCILIBMANUAL.md) | Ultimate Command Interface (UCI) protocol library |
+| [`docs/TURBOCONTROL_MANUAL.md`](docs/TURBOCONTROL_MANUAL.md) | Ultimate 64 CPU speed control library |
+| [`docs/UCILIB_MANUAL.md`](docs/UCILIB_MANUAL.md) | Ultimate Command Interface (UCI) protocol library |
+| [`docs/OSCAR64_MANUAL.md`](docs/OSCAR64_MANUAL.md) | Oscar64 compiler reference (copy of the maintainer's canonical manual) |
+| [`tests/README.md`](tests/README.md) / [`tests/e2e/README.md`](tests/e2e/README.md) | Host-side timing tests and the end-to-end test on real hardware |
 | [`CHANGELOG.md`](CHANGELOG.md) | Version history |
 | [`CREDITS.md`](CREDITS.md) | Full attribution |

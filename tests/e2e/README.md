@@ -184,7 +184,7 @@ To update goldens after an intended change to the picture:
     means the program has not reached the probe yet and is stuck
     earlier, in the UCI detection or palette push.
   - The UCI status is the 4 bytes at `$DF1C`-`$DF1F`; the first is the
-    status register (see `UCILIBMANUAL.md` §2). A non-zero `STATE`
+    status register (see `docs/UCILIB_MANUAL.md` §2). A non-zero `STATE`
     (bits 4-5) while the program has not reached the probe points at a
     stuck UCI handshake.
 - `got N of 8 video frames`: the video stream does not reach the host.
@@ -203,6 +203,34 @@ To update goldens after an intended change to the picture:
   intended, update the goldens as described above.
 - `cross-check NAME: N dots differ`: the 48 MHz and 64 MHz devices
   showed different pictures for the same step.
+
+## Running from WSL2
+
+WSL2's default NAT networking never delivers the video stream to Linux:
+the device sends to the Windows host, not to the WSL VM's private
+address. Set up once (tested on Windows 11 with WSL 2.7.10, firmware
+3.15a):
+
+1. `C:\Users\<you>\.wslconfig`:
+   ```ini
+   [wsl2]
+   networkingMode=mirrored
+   ```
+   then `wsl --shutdown` from PowerShell (or reboot). Check with
+   `wslinfo --networking-mode` (prints `mirrored`); WSL then has the
+   PC's own LAN address.
+2. Open the stream ports in the Hyper-V firewall, which blocks inbound
+   traffic into WSL by default. In an admin PowerShell:
+   ```powershell
+   New-NetFirewallHyperVRule -Name C64VideoStream -DisplayName "C64 Ultimate stream" -Direction Inbound -VMCreatorId '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -Protocol UDP -LocalPorts 11000-11010 -Action Allow
+   ```
+   The rule is persistent. 11000-11010 covers two devices (port 11000 +
+   10 per device); widen it for more.
+3. In mirrored mode WSL shares port numbers with Windows. A Windows
+   program bound to the same UDP port (for example OBS Studio receiving
+   the Ultimate's stream on 11000) makes the run fail to bind; close it
+   while testing. The device sends each stream to one destination at a
+   time anyway.
 
 ## Files
 
