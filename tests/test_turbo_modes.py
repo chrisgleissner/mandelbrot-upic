@@ -199,9 +199,10 @@ def shown_48mhz(values_of_byte):
 
 def code_diffs(after, expected, symbols):
     """Addresses that differ, ignoring zero page, the stack page and
-    data the call itself writes (the probe's result and retry count)."""
+    data the call itself writes (the probe's result: our class and the
+    library's raw line count)."""
     skip = set()
-    for name in ('upic_probe_class', 'upic_probe_tries'):
+    for name in ('upic_probe_class', 'uii_turbo_probe_result'):
         if name in symbols:
             a, b = symbols[name]
             skip.update(range(a, b))
@@ -312,21 +313,18 @@ class ReleaseBuild(unittest.TestCase):
     def test_probe_gives_up_at_1mhz(self):
         # Turbo never comes on (e.g. no .cfg, Turbo Control off): the
         # probe must stop after its retry budget and keep the 64 MHz
-        # path, not loop forever. The budget is cut from 256 loops to 3
-        # here to keep the test fast; the retry logic is the same.
-        image = bytearray(self.image)
-        image[self.symbols['upic_probe_tries'][0]] = 3
+        # path, not loop forever. The budget is the library's full 256
+        # loops: uii_turbo_probe_max() keeps its counter in a local, so
+        # unlike the earlier in-project probe it can't be cut short here.
+        # (The library also requires two agreeing readings before it
+        # accepts a class, so a single 48 MHz reading never switches the
+        # path; that case needed a one-loop budget and is not repeated.)
         for ratio in (ELITE2, U64):
-            m = select(image, self.symbols, ratio, slow_until=10**12)
-            self.assertEqual(code_diffs(m.mem, image, self.symbols), [],
+            m = select(self.image, self.symbols, ratio, slow_until=10**12)
+            self.assertEqual(code_diffs(m.mem, self.image, self.symbols), [],
                              'ratio %d' % ratio)
-        # Giving up always means the 64 MHz path, even when the last
-        # reading said 48 MHz: with a budget of one loop, a U64 at full
-        # speed reads 48 MHz once, has nothing to confirm it with, and
-        # must not take the 48 MHz path on that alone.
-        image[self.symbols['upic_probe_tries'][0]] = 1
-        m = select(image, self.symbols, U64)
-        self.assertEqual(code_diffs(m.mem, image, self.symbols), [])
+            self.assertEqual(m.mem[self.symbols['upic_probe_class'][0]], 2,
+                             'ratio %d: gave up' % ratio)
 
     def test_selection_survives_forced_1mhz_after_reset(self):
         # The U64 runs the CPU at 1 MHz for a few seconds after a reset; the

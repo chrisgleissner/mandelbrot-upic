@@ -73,9 +73,12 @@ submodule `lib/ultimate-uci-oscar64` and pinned to a release tag
 **Never edit files inside `lib/`**: fix the library in its own
 repository, release a new tag, then check that tag out in the
 submodule and commit. This project uses `ultimate_common_lib` and
-`ultimate_turbo_lib` (`uii_turbo_fast()`); its own 48/64 MHz speed
-probe stays in `upic_viewer.c` (the patcher and `make test` depend on
-it).
+`ultimate_turbo_lib` (`uii_turbo_fast()`, and `uii_turbo_probe_max()`
+for the 48/64 MHz speed probe in `upic_select_display_path()` -- a
+port of the probe Christian Gleissner first wrote here).
+`upic_probe_class` must stay `volatile`: `make test` and `make e2e`
+read it from memory, and Oscar64 would otherwise keep it in a
+register and drop the variable.
 
 Full protocol reference: `lib/ultimate-uci-oscar64/docs/UCILIB_MANUAL.md`. Since this demo requires
 firmware 3.15+ unconditionally, there's no need to guard these calls
@@ -93,8 +96,8 @@ build's own `.map` file after changing anything in this pool -- a
 clean build alone is not sufficient evidence of correct placement this
 close to the boundary.
 
-The default `main` region (`$0853`-`$1800`) has 288 bytes free in the
-current build: BSS ends at `$1690` and the stack section starts at
+The default `main` region (`$0853`-`$1800`) has 200 bytes free in the
+current build: BSS ends at `$16E8` and the stack section starts at
 `$17B0`, with `stacksize` 80 (the compiler's minimum is 68). It had 0
 bytes free, with `stacksize` cut to 72, until `mandelbrot_generate()`'s
 symmetry check stopped linking Oscar64's 32-bit division runtime

@@ -166,8 +166,8 @@ class DeviceRun:
 
     def diagnostics(self):
         try:
-            return "probe class %d, retries left %d, UCI status %s" % (
-                self.peek("upic_probe_class"), self.peek("upic_probe_tries"),
+            return "probe class %d, last probe %d lines, UCI status %s" % (
+                self.peek("upic_probe_class"), self.peek("uii_turbo_probe_result"),
                 self.u.read_memory(0xDF1C, 4).hex())
         except UltimateError as e:
             return str(e)

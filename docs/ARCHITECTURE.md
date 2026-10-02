@@ -53,9 +53,9 @@ There is no exit -- see `docs/ZOOM_FEATURE.md` for why.
   a release tag. This project uses `ultimate_common_lib` (UCI protocol:
   palette control, device detection) and `ultimate_turbo_lib` (U64 CPU
   speed control); see the library's `docs/UCILIB_MANUAL.md` and
-  `docs/TURBOCONTROL_MANUAL.md`. The 48/64 MHz speed probe stays in
-  `upic_viewer.c`, since the display-path patcher and the timing tests
-  depend on it.
+  `docs/TURBOCONTROL_MANUAL.md`. The 48/64 MHz speed probe is the
+  library's `uii_turbo_probe_max()`, called from
+  `upic_select_display_path()`.
 
 ## Interrupts
 

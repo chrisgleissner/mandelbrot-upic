@@ -12,6 +12,15 @@
   the main region has 288 bytes free (was 323). Verified with
   `make test` and `make e2e` on an Ultimate 64 Elite II and an Ultimate
   64 Elite (firmware 3.15a); startup and generation times unchanged.
+- The 48/64 MHz speed probe is now the library's `uii_turbo_probe_max()`,
+  a port of the probe Christian Gleissner wrote for v1.1.0, instead of
+  this project's own copy in `upic_select_display_path()`. Same method
+  and thresholds; the library also restores `$D030`/`$D031` afterwards
+  and returns at once when there are no turbo registers. The main
+  region now has 200 bytes free. `make test`'s give-up case runs the
+  full 256-loop budget (about 30 s). Verified with `make e2e` on both
+  devices, and 6 restarts each: always the right path (probe readings
+  16 lines on the Elite II, 21 on the Elite).
 
 ## [1.1.1]
 

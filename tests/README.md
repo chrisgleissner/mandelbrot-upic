@@ -10,7 +10,8 @@ python3 -m unittest discover -s tests -v
 Python 3 standard library only, no packages to install. The tests read
 the PRGs and their Oscar64 `.map` files from `build/` and the
 end-to-end golden images from `e2e/golden/`. The 22 tests take about
-40 seconds.
+70 seconds (about 30 of them for the probe's full 256-loop give-up
+case).
 
 The end-to-end test on real hardware (`make e2e`) lives in `e2e/`; see
 `e2e/README.md`. It is not part of `make test`.
@@ -89,10 +90,14 @@ The model is checked against real hardware in three places:
   1 MHz window ends at various points during the probe, and when the
   speed register reads 1 MHz at the start (the probe writes it again
   on every retry).
-- On a machine that never leaves 1 MHz the probe gives up and keeps
-  the 64 MHz path (the retry budget is cut from 256 to 3 loops in the
-  test to keep it fast). With a budget of one loop, a U64 at full speed
-  also keeps the 64 MHz path: a single 48 MHz reading is not enough.
+- On a machine that never leaves 1 MHz the probe gives up after its
+  full 256-loop budget, keeps the 64 MHz path and leaves
+  `upic_probe_class` at 2. (The probe is the library's
+  `uii_turbo_probe_max()`, which keeps its retry counter in a local, so
+  the budget can no longer be cut short in the test; this test takes
+  about 30 s. The earlier one-loop-budget case, a single 48 MHz reading
+  not being enough, is covered by the library requiring two agreeing
+  readings and is no longer tested here.)
 - A full 256-row frame at 64 MHz (Elite II) and, after the rebuild, at
   48 MHz (U64 at index 15; Elite II at index 14 in the force48 build):
   every row stays inside one raster line, rows land on consecutive
@@ -126,4 +131,6 @@ rejection of forced-1 MHz results (an Elite II then gets the 48 MHz
 path). Mutations tried on 2026-09-28, each caught: removing the
 dummy-read model from `mos6502.py` (2 tests fail), removing the class
 increment on the probe's give-up path (1 test fails), and removing the
-probe's per-retry write of the speed register (1 test fails).
+probe's per-retry write of the speed register (1 test fails). Those
+last two mutations were made in the in-project probe, which has since
+been replaced by the library's port of it (same logic).

@@ -172,17 +172,18 @@ To update goldens after an intended change to the picture:
 
 ## Troubleshooting
 
-- `no picture after 120s (probe class C, retries left R, UCI status
-  XXXXXXXX)`: the program did not complete its first picture. The
-  diagnostics are read from the running machine:
-  - `upic_probe_class`: 2 while the speed probe has no result yet,
-    0 or 1 once it has chosen the 48 MHz or 64 MHz path. 3 means it
-    gave up after 256 loops without turbo (check `Turbo Control`); the
-    program then runs at 1 MHz.
-  - `upic_probe_tries`: loops left before the probe gives up, counting
-    down from 256 (the initial 0 counts as 256). Class 2 with 0 left
-    means the program has not reached the probe yet and is stuck
-    earlier, in the UCI detection or palette push.
+- `no picture after 120s (probe class C, last probe L lines, UCI
+  status XXXXXXXX)`: the program did not complete its first picture.
+  The diagnostics are read from the running machine:
+  - `upic_probe_class`: 0 or 1 once the speed probe has chosen the
+    48 MHz or 64 MHz path; 2 while it is still running, or after it gave
+    up following 256 loops without turbo (check `Turbo Control`; the
+    program then runs at 1 MHz).
+  - `uii_turbo_probe_result`: raster lines the last probe loop took (the
+    probe is the library's `uii_turbo_probe_max()`): about 16 at 64 MHz,
+    21-22 at 48 MHz, 92 for a loop entirely at 1 MHz. 0 means the
+    program has not reached the probe yet and is stuck earlier, in the
+    UCI detection or palette push.
   - The UCI status is the 4 bytes at `$DF1C`-`$DF1F`; the first is the
     status register (see the UCI library manual, `lib/ultimate-uci-oscar64/docs/UCILIB_MANUAL.md` §2). A non-zero `STATE`
     (bits 4-5) while the program has not reached the probe points at a

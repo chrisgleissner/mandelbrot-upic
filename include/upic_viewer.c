@@ -40,6 +40,7 @@ module), is in docs/UPIC_VIEWER.md's "Real-hardware validation" section.
 #include <c64/keyboard.h>
 #include "rombank.h"
 #include "upic_viewer.h"
+#include "ultimate_turbo_lib.h"   // uii_turbo_probe_max(), see upic_select_display_path()
 
 // ---------------------------------------------------------------
 // Picture buffer, split across two physical locations (2026-09-09,
@@ -1200,29 +1201,20 @@ __asm render_frame
 //     index 14, which is 48 MHz on Elite II / C64U -- so this path can
 //     be checked on a 64 MHz machine.
 //
-// Speed probe. Times a fixed 64764-cycle loop against the raster
-// counter, which advances at the real PAL line rate whatever the CPU
-// speed. Every loop-back is an absolute jmp (always 3 cycles), so the
-// count does not depend on where the linker places this function:
-//
-//   64 MHz: 64764 / (63 * 63) = 16.3 lines -> $D012 ends at $30
-//   48 MHz: 64764 / (63 * 47) = 21.9 lines -> $D012 ends at $35/$36
-//
-// The Ultimate 64 runs the CPU at 1 MHz for a few seconds after every
-// CPU reset, whatever $D031 says, and briefly after IEC bus activity
-// -- this probe runs well inside the first window when the program is
-// started from the Ultimate menu. A whole loop at 1 MHz
-// spans 1028 lines and deterministically ends at $7C, which is
-// rejected. A loop during which the forced window ends can end on any
-// line, so a result is only accepted once two consecutive loops agree
-// on the same class; at most one loop per window can be affected.
-//
-// Each retry writes the turbo control byte again, so a machine whose
-// speed register was reset after uii_turbo_fast() still gets there. If no
-// class is accepted within 256 loops (about 20 s at 1 MHz: turbo is
-// off, e.g. the program was started without its .cfg), the probe gives
-// up and keeps the unpatched 64 MHz path, as v1.0.3 did, rather than
-// waiting forever with nothing on screen.
+// Speed probe: uii_turbo_probe_max() from the ultimate-uci-oscar64
+// library (ultimate_turbo_lib), a port of the probe Christian Gleissner
+// wrote here for PR #2. It times a fixed 64764-cycle loop against the
+// raster counter, which advances at the real PAL line rate whatever the
+// CPU speed (16.3 lines at 64 MHz, 21.9 at 48 MHz), rejects loops run
+// during the forced 1 MHz window after a reset (a whole loop at 1 MHz
+// spans 1028 lines), only accepts a class once two consecutive loops
+// agree, rewrites the turbo control registers on every retry, and gives
+// up after 256 loops (about 20 s at 1 MHz: turbo is off, e.g. the
+// program was started without its .cfg). Giving up keeps the unpatched
+// 64 MHz path, as v1.0.3 did, rather than waiting forever with nothing
+// on screen. It restores $D030/$D031 afterwards; render_frame()
+// rewrites $D031 on every line anyway. See the library's
+// docs/TURBOCONTROL_MANUAL.md for the full description.
 //
 // One-way: called once at startup, before the first frame, and never
 // undone. Lives in "main" (not upiccode) since it runs only once.
@@ -1231,73 +1223,25 @@ __asm render_frame
 // ---------------------------------------------------------------
 #define UPIC_DELAY_48       99
 #define UPIC_GROUPS_48      94
-#define UPIC_PROBE_START    0x20
-#define UPIC_PROBE_64MHZ    (UPIC_PROBE_START + 19)   // below: 64 MHz
-#define UPIC_PROBE_VALID    (UPIC_PROBE_START + 26)   // below: 48 MHz; else retry
 
 unsigned char upic_frame_quarters = 4;
 
 #ifndef UPIC_FORCE_48MHZ
-// Probe result: 1 = 64 MHz, 0 = 48 MHz. The whole retry loop is one
-// asm block writing a file-scope static, not C control flow around a
-// shorter asm block: written that way Oscar64 duplicated the asm body
-// three times and read the result before the loop (checked in the
-// -g .asm listing), the inline-asm hazard docs/OSCAR64_MANUAL.md describes.
-// Starts at 2 (no valid result yet) as initialized data rather than
-// an asm store, which saved 5 bytes of the "main" region.
-static unsigned char upic_probe_class = 2;
-// Loops left before the probe gives up: 0 wraps to 256 on the first
-// decrement.
-static unsigned char upic_probe_tries = 0;
+// Probe result: 0 = 48 MHz, 1 = 64 MHz, 2 = no result (the probe gave
+// up; any nonzero class keeps the 64 MHz path). volatile: only this
+// function uses it, so Oscar64 would otherwise keep it in a register
+// and drop the variable -- but tests/ and tests/e2e read it from memory.
+static volatile unsigned char upic_probe_class = 2;
 #endif
 
 void upic_select_display_path(void)
 {
 #ifndef UPIC_FORCE_48MHZ
-    __asm {
-    retry:
-        lda #$8f                 // TURBO_SPEED_MAX | TURBO_BADLINES_OFF,
-        sta $d031                // again: see the comment above
-    f1:
-        lda $d011                // wait for the bottom of the frame...
-        bpl f1
-    f2:
-        lda $d011                // ...then for the raster to wrap to 0
-        bmi f2
-        lda #UPIC_PROBE_START
-    w:
-        cmp $d012
-        bne w
-
-        ldy #36                  // 36 * 1799 = 64764 cycles
-    o:
-        ldx #0
-    i:
-        dex
-        beq id
-        jmp i
-    id:
-        dey
-        beq od
-        jmp o
-    od:
-        lda $d012
-        ldx #2
-        cmp #UPIC_PROBE_VALID
-        bcs store                // forced slow-down: class 2, measure again
-        dex
-        cmp #UPIC_PROBE_64MHZ
-        bcc same                 // class 1: 64 MHz
-        dex                      // class 0: 48 MHz
-    same:
-        cpx upic_probe_class
-        beq done                 // two loops in a row agree
-    store:
-        stx upic_probe_class
-        dec upic_probe_tries
-        bne retry
-        inc upic_probe_class     // gave up: any nonzero class keeps 64 MHz
-    done:
+    {
+        char max = uii_turbo_probe_max();
+        upic_probe_class = max == TURBO_MAX_48MHZ ? 0
+                         : max == TURBO_MAX_64MHZ ? 1
+                         : 2;
     }
     if (upic_probe_class)
         return;

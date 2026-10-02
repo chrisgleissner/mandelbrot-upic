@@ -166,11 +166,15 @@ the hardware bisection exactly (56 fits, 57 does not).
 
 ### Speed probe
 
-`upic_select_display_path()` times a fixed 64,764-cycle loop against
-`$D012`, which advances once per real PAL line at any CPU speed:
-16.3 lines at 64 MHz (`$D012` ends at `$30`), 21.9 lines at 48 MHz
-(`$35`). Every loop-back is an absolute `jmp`, so the cycle count does
-not depend on where the linker places the function.
+`upic_select_display_path()` calls `uii_turbo_probe_max()` from the
+ultimate-uci-oscar64 library (`ultimate_turbo_lib`), a port of the
+probe Christian Gleissner originally wrote in this file for v1.1.0. It
+times a fixed 64,764-cycle loop against `$D012`, which advances once
+per real PAL line at any CPU speed: 16.3 lines at 64 MHz, 21.9 lines at
+48 MHz. Every loop-back is an absolute `jmp`, so the cycle count does
+not depend on where the linker places the function. The result is
+stored in `upic_probe_class` (0 = 48 MHz, 1 = 64 MHz, 2 = no result),
+which the tests and `make e2e` read.
 
 The Ultimate 64 runs the CPU at 1 MHz for a few seconds after every
 CPU reset, whatever `$D031` says, and briefly after IEC bus activity.
@@ -183,7 +187,8 @@ answer. The 48 MHz answer rebuilds the renderer; the 64 MHz answer
 changes nothing.
 
 Each retry writes `$8F` (top speed index, badlines off) to `$D031`
-again. If the speed register was reset after `uii_turbo_fast()`, the
+again, and the library restores `$D030`/`$D031` afterwards
+(`render_frame()` rewrites `$D031` on every line anyway). If the speed register was reset after `uii_turbo_fast()`, the
 probe therefore still reaches full speed instead of looping at 1 MHz.
 If no result is accepted within 256 loops (about 20 s at 1 MHz, for
 example because turbo stays off when the program is started without
@@ -191,9 +196,11 @@ its `.cfg`), the probe gives up and keeps the unpatched 64 MHz path
 instead of waiting forever with a black screen. The program then
 generates and displays at 1 MHz with a garbled picture, as v1.0.3 did
 without turbo (checked on a C64 Ultimate with `Turbo Control` set to
-manual 1 MHz: the 256 loops took 21 s). The probe gives up to the
-64 MHz path even when the last loop read 48 MHz, because a single
-reading is never accepted on its own.
+manual 1 MHz: the 256 loops took 21 s, with the in-project version of
+the probe). The probe gives up to the 64 MHz path even when the last
+loop read 48 MHz, because a single reading is never accepted on its
+own. When the turbo registers aren't present at all (`$D031` reads
+`$FF`), the library returns at once instead of looping.
 
 ### Checking the 48 MHz path on a 64 MHz machine
 
