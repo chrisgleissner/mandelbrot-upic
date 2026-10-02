@@ -19,7 +19,7 @@ Ultimate running the same PRG (see `make e2e` under
 
 See `CREDITS.md` for full attribution.
 
-**Status**: v1.1.0, feature-complete and confirmed working on real
+**Status**: v1.1.1, feature-complete and confirmed working on real
 hardware: an Ultimate 64 Elite II (64 MHz path) and an Ultimate 64
 Elite (48 MHz path), both on firmware 3.15a.
 

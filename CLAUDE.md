@@ -15,9 +15,9 @@ interactively pan and zoom into any region of the result. Targets
 firmware). Confirmed on an Ultimate 64 Elite II (64 MHz path) and an
 Ultimate 64 Elite (48 MHz path), both firmware 3.15a. The C64 Ultimate
 needs its palette-control firmware release (expected 1.2, not yet out
-as of v1.1.0); PR #2's author ran the PRG on a 1.2 release candidate.
+as of v1.1.1); PR #2's author ran the PRG on a 1.2 release candidate.
 
-**Status**: v1.1.0, feature-complete. See `README.md` for controls and
+**Status**: v1.1.1, feature-complete. See `README.md` for controls and
 installation, `docs/ARCHITECTURE.md` for the project layout,
 `docs/MANDELBROT_ALGORITHM.md` for the fractal generator's design,
 `docs/UPIC_VIEWER.md` for the display technique, and
