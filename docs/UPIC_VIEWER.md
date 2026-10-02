@@ -223,12 +223,14 @@ model reproduces the `$87` / `$A5` bisection at 64 MHz, the 56 / 57
 bisection of the first 48 MHz layout, and the position errors measured
 for delays 98, 99 and 100.
 
-Known open point: the shipped `.cfg` sets `Turbo Control=U64 Turbo
-Registers`. On a C64 Ultimate (firmware 1.2RC) that setting's value is
-named `C64U Turbo Registers`, and the REST API rejects `U64 Turbo
-Registers` there. Whether the menu's automatic `.cfg` load also skips
-the setting has not been checked. See the installation notes in
-`README.md`.
+The shipped `.cfg` (`config/MandelbrotUpic.cfg`) contains both
+`Turbo Control=U64 Turbo Registers` and `Turbo Control=C64U Turbo
+Registers`: each product's firmware skips the value name it doesn't
+know and applies the other, and the rest of the file still loads.
+Verified on an Ultimate 64 Elite II (firmware 3.15a): starting from
+`Turbo Control=Off`, auto-loading the file set `U64 Turbo Registers`
+with nothing shown on screen. The C64 Ultimate side is not yet
+verified. See the installation notes in `README.md`.
 
 ## Picture buffer: split across two locations
 

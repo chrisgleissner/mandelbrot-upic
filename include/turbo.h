@@ -2,8 +2,8 @@
 Ultimate 64 Turbo Control Library
 
 Targets the U64-specific $D031 turbo speed register.
-Firmware menu must have "Turbo Mode" set to "U64 Turbo Registers"
-for detection to work correctly.
+Firmware menu must have "Turbo Control" set to "U64 Turbo Registers"
+(C64 Ultimate: "C64U Turbo Registers") for detection to work correctly.
 
 Detection method — CIA TOD timing with deliberate loop overhead:
   turbo_detect() calls benchmark_delay() which uses CIA1 TOD

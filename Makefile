@@ -91,12 +91,15 @@ TARGET = build/$(MAIN).prg
 # on a 64 MHz machine. Not part of the release ZIP -- see src/main.c.
 FORCE48 = build/$(MAIN)-force48.prg
 
-# Ultimate 64 config preset (enables Command Interface + U64 turbo
-# registers this demo needs). Deployed/zipped as $(MAIN).cfg -- SAME
+# Config preset (enables Command Interface + the turbo registers this
+# demo needs). It lists Turbo Control twice, once with the Ultimate 64
+# value name and once with the C64 Ultimate one: each firmware skips the
+# name it doesn't know and applies the other, so one file serves every
+# machine (see README.md, Installation). Deployed/zipped as $(MAIN).cfg -- SAME
 # base name as $(MAIN).prg, in the SAME directory -- so the Ultimate's
 # own firmware auto-loads it whenever mandelupic.prg is run, no manual
 # "load config" step needed.
-CONFIGFILE = config/MandelbrotUpic-U64E2.cfg
+CONFIGFILE = config/MandelbrotUpic.cfg
 
 ########################################
 

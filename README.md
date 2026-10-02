@@ -99,9 +99,10 @@ Requires **firmware 3.15 or newer** on an **Ultimate 64**, **Ultimate
 shows the full picture; the original Ultimate 64 and the Elite top out
 at 48 MHz and use the 48 MHz display path described above. The
 Commodore 64 Ultimate (C64U), built on the Elite II design with its own
-firmware branch, ran the same PRG on firmware 1.2RC (a release
-candidate) in the 48 MHz work's own testing -- see the known open point
-below.
+firmware branch, needs the C64U firmware release that adds palette
+control (expected to be 1.2, not yet released at the time of writing);
+the same PRG already ran on a 1.2 release candidate during the 48 MHz
+work's testing.
 
 1. Copy both `mandelupic.prg` and `mandelupic.cfg` onto your Ultimate's
    SD card or USB storage, in the same folder -- extracting the
@@ -113,18 +114,20 @@ below.
 The Ultimate's own firmware auto-loads a config file that shares its
 base name with the program being run -- `mandelupic.cfg` next to
 `mandelupic.prg` is picked up automatically, no manual "load config"
-step needed. It enables the Command Interface (UCI) and U64 turbo
-registers this demo needs (using the Ultimate 64 setting names); if your
-own configuration already has both enabled, this has no effect either
-way.
+step needed. It enables the Command Interface (UCI) and the turbo
+registers this demo needs; if your own configuration already has both
+enabled, this has no effect either way.
 
-Known open point: the `.cfg` sets `Turbo Control` to `U64 Turbo
-Registers`. On a C64 Ultimate (firmware 1.2RC) that value is named
-`C64U Turbo Registers`, and the Ultimate's REST API rejects `U64 Turbo
-Registers` there. Whether the automatic `.cfg` load also skips the
-setting has not been checked. If the demo does not run at turbo speed
-on a C64 Ultimate, set `Turbo Control` to `C64U Turbo Registers` in
-the Ultimate menu.
+The same `mandelupic.cfg` works on every supported machine, so there is
+nothing to choose or rename. The turbo setting has a different value
+name per product (`U64 Turbo Registers` on an Ultimate 64,
+`C64U Turbo Registers` on a C64 Ultimate), so the file contains both
+lines: the firmware skips the value it doesn't know and applies the one
+it does, silently when the file is auto-loaded. (Loading the file by
+hand from the menu shows a brief message about the skipped line; that
+is expected and harmless.) If the demo still doesn't run at turbo
+speed, set `Turbo Control` to your machine's "... Turbo Registers"
+value in the Ultimate menu.
 
 ## Building from source
 

@@ -13,9 +13,9 @@ technique), displays it live as it renders, and lets the user
 interactively pan and zoom into any region of the result. Targets
 **Ultimate firmware 3.15 or newer only** (no fallback path for older
 firmware). Confirmed on an Ultimate 64 Elite II (64 MHz path) and an
-Ultimate 64 Elite (48 MHz path), both firmware 3.15a; a C64 Ultimate on
-firmware 1.2RC was tested by PR #2's author (see `README.md`'s known
-open point about the `.cfg`'s turbo setting name there).
+Ultimate 64 Elite (48 MHz path), both firmware 3.15a. The C64 Ultimate
+needs its palette-control firmware release (expected 1.2, not yet out
+as of v1.1.0); PR #2's author ran the PRG on a 1.2 release candidate.
 
 **Status**: v1.1.0, feature-complete. See `README.md` for controls and
 installation, `docs/ARCHITECTURE.md` for the project layout,
@@ -53,8 +53,11 @@ behavior.
   a start-up hang -- see `docs/UCILIB_MANUAL.md`). On an Ultimate 64 Elite
   (firmware 3.15) the unlock did not bring the UCI up with "Command
   Interface" disabled, so the palette is not pushed there;
-  `config/MandelbrotUpic-U64E2.cfg` enables the interface, alongside
-  U64 turbo registers.
+  `config/MandelbrotUpic.cfg` enables the interface, alongside the
+  turbo registers. It lists `Turbo Control` twice (`U64 Turbo
+  Registers` and `C64U Turbo Registers`): each firmware skips the value
+  name it doesn't know, so one `.cfg` serves both product lines --
+  don't "clean up" the duplicate line.
 - **Palette control**: `uii_getpalette()`/`uii_setpalette()`/
   `uii_setpalettecolor()`/`uii_resetpalette()`, wrapping UCI control
   commands `$51`-`$54` (`GET_PALETTE`/`SET_PALETTE`/

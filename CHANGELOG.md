@@ -85,6 +85,14 @@ hang fix, and the host-side and end-to-end test suites below. See
   unreachable.
 - `make e2e` recognises the product name `Ultimate 64-II`, which
   firmware 3.15a reports for an Ultimate 64 Elite II.
+- One `.cfg` for every machine: `config/MandelbrotUpic.cfg` (renamed
+  from `MandelbrotUpic-U64E2.cfg`) lists `Turbo Control` twice, with
+  the Ultimate 64 value name (`U64 Turbo Registers`) and the C64
+  Ultimate one (`C64U Turbo Registers`). Each firmware skips the value
+  it doesn't know and applies the rest of the file. Verified on an
+  Ultimate 64 Elite II: from `Turbo Control=Off`, auto-loading the file
+  set `U64 Turbo Registers` with nothing shown on screen. Replaces the
+  earlier "known open point" about the C64U's setting name.
 - Documentation: the root-level manuals moved into `docs/` with
   upper-case names (`docs/OSCAR64_MANUAL.md`, `docs/UCILIB_MANUAL.md`,
   `docs/TURBOCONTROL_MANUAL.md`); the Oscar64 manual is refreshed from
