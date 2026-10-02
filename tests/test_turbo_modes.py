@@ -17,7 +17,7 @@ What is checked:
 - upic_select_display_path() leaves a 64 MHz machine untouched and
   rebuilds exactly the intended bytes on a 48 MHz one, including when
   the post-reset forced 1 MHz window is still running, when the speed
-  register was reset after turbo_fast(), and when the probe gives up
+  register was reset after uii_turbo_fast(), and when the probe gives up
   on a machine that never leaves 1 MHz.
 - The 48 MHz path also sets upic_frame_quarters to 3, so a live frame
   is shown every 3/4 column during generation (every column at 64 MHz).
@@ -300,7 +300,7 @@ class ReleaseBuild(unittest.TestCase):
 
     def test_probe_restores_a_lost_speed_setting(self):
         # The speed register reads back 1 MHz (index 0) when the probe
-        # starts, e.g. because something reset it after turbo_fast().
+        # starts, e.g. because something reset it after uii_turbo_fast().
         # The probe writes it again on every retry, so both boards still
         # end up on their own path.
         expected_48 = expected_48mhz_patch(self.image, self.symbols)
@@ -426,7 +426,7 @@ class Force48Build(unittest.TestCase):
         self.assertEqual(code_diffs(m.mem, expected, self.symbols), [])
 
     def test_48mhz_path_on_elite2(self):
-        # turbo_fast() leaves index 15 (64 MHz); the first line's resync
+        # uii_turbo_fast() leaves index 15 (64 MHz); the first line's resync
         # write switches to the patched index 14 (48 MHz on Elite II).
         mem = select(self.image, self.symbols, ELITE2).mem
         m, pixels, reads = render_frame(mem, self.symbols, ELITE2)

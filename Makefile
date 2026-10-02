@@ -6,7 +6,7 @@
 # border-color raster technique. Requires firmware 3.15 or newer (uses the
 # fw 3.15+ UCI auto-enable sequence and the GET_PALETTE/SET_PALETTE/
 # SET_PALETTE_COLOR/RESET_PALETTE control commands -- see
-# docs/UCILIB_MANUAL.md).
+# lib/ultimate-uci-oscar64/docs/UCILIB_MANUAL.md).
 
 # Target platform
 SYS = c64
@@ -60,7 +60,16 @@ VERSION           = v$(VERSION_MAJOR).$(VERSION_MINOR).$(VERSION_PATCH)-$(VERSIO
 #                      which the library's normal 512/256-byte queues
 #                      don't fit alongside. A palette push only ever
 #                      transfers 50 bytes, so 64/16 is plenty.
+# Ultimate libraries (UCI and U64 turbo control) from their own repository,
+# https://github.com/xahmol/ultimate-uci-oscar64, included as the git
+# submodule lib/ultimate-uci-oscar64 and pinned to a release tag. Clone
+# this repository with --recursive (or run `git submodule update --init`).
+# Never edit files inside lib/: fix the library upstream, then update the
+# submodule to the new tag.
+UCILIB = lib/ultimate-uci-oscar64/include
+
 CFLAGS = -i=include \
+         -i=$(UCILIB) \
          -tm=$(SYS) \
          -tf=prg \
          -O2 \
@@ -78,10 +87,9 @@ MAINSRC = src/main.c
 ALLSRCS = $(MAINSRC) \
           include/upic_viewer.c include/upic_viewer.h \
           include/rombank.c include/rombank.h \
-          include/turbo.c include/turbo.h \
-          include/ultimate_common_lib.c include/ultimate_common_lib.h \
           include/mandelbrot.c include/mandelbrot.h \
-          include/zoom.c include/zoom.h
+          include/zoom.c include/zoom.h \
+          $(wildcard $(UCILIB)/*.c $(UCILIB)/*.h)
 
 # Output
 TARGET = build/$(MAIN).prg

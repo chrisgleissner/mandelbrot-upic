@@ -16,12 +16,12 @@ Usage:
     // fill upic_buffer[] (e.g. via UCI file load) with a 49152-byte
     // packed Upic picture -- see tools/upic_convert.py's .upic output
     uii_setpalette(pal48);   // push the picture's palette (SET_PALETTE)
-    turbo_fast();
+    uii_turbo_fast();
     while (!upic_show_frame())
         ;  // one PAL frame per call; returns nonzero once SPACE seen
     upic_restore_display();
     uii_resetpalette();      // or load the next scene's own .pal
-    turbo_slow();
+    uii_turbo_slow();
 
 Exit key is SPACE, not RUN/STOP -- deliberate, see upic_show_frame()'s
 own doc comment below for why.
@@ -101,7 +101,7 @@ extern volatile char upic_buffer_reloc[UPIC_RELOC_BYTES];
 // the first time this is called, and leaves it out for the whole
 // picture-viewing session (not restored every frame) -- see
 // upic_restore_display() for putting it back. Does NOT touch turbo
-// speed or the palette -- call turbo_fast()/uii_setpalette() yourself
+// speed or the palette -- call uii_turbo_fast()/uii_setpalette() yourself
 // first. Returns 1 once SPACE is pressed (caller should stop looping),
 // 0 otherwise. Call in a loop to keep displaying the picture.
 //
@@ -133,7 +133,7 @@ void upic_restore_display(void);
 // renderer as its 48 MHz path: same screen area, 3 of every 4 pixels
 // shown (pixels 4m, 4m+2 and 4m+3, about 1.36 dots each), and sets
 // upic_frame_quarters to 3. Call once, after rombank_out() and
-// turbo_fast(), with interrupts masked, before the first
+// uii_turbo_fast(), with interrupts masked, before the first
 // upic_show_frame(). PAL only. Built with UPIC_FORCE_48MHZ
 // (`make force48`) it skips the measurement and always takes the
 // 48 MHz path at index 14. See upic_viewer.c.

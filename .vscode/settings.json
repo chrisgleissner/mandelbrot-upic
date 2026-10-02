@@ -1,7 +1,7 @@
 {
     "files.associations": {
         "ultimate_common_lib.h": "c",
-        "turbo.h": "c",
+        "ultimate_turbo_lib.h": "c",
         "rombank.h": "c",
         "mandelbrot.h": "c",
         "upic_viewer.h": "c"

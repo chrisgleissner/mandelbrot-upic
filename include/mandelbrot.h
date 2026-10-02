@@ -106,7 +106,7 @@ extern fixed_t mandel_dy;
 //
 // Call after rombank_out() (upic_buffer_reloc, like upic_buffer,
 // genuinely requires MMAP_NO_ROM active to write correctly -- see
-// upic_viewer.h) and ideally after turbo_fast() (see turbo.h) --
+// upic_viewer.h) and ideally after uii_turbo_fast() (see ultimate_turbo_lib.h) --
 // nothing about generation depends on turbo being on, but at stock
 // 1 MHz this is slow enough to be worth avoiding.
 void mandelbrot_generate(void);

@@ -5,6 +5,7 @@
             "includePath": [
                 "/home/xahmol/oscar64/include/",
                 "${workspaceFolder}/include",
+                "${workspaceFolder}/lib/ultimate-uci-oscar64/include",
                 "${workspaceFolder}/src"
             ],
             "defines": [

@@ -104,7 +104,8 @@ contributed the 48 MHz display path for the original Ultimate 64 /
 Elite I, including the startup speed probe that picks the path from
 the same PRG (`upic_select_display_path()` in
 `include/upic_viewer.c`), the fix for a startup hang in the UCI
-library's command handshake (`include/ultimate_common_lib.c`), the
+library's command handshake (`ultimate_common_lib.c`, now part of the
+ultimate-uci-oscar64 library), the
 host-side cycle-counting 6502 test suite (`tests/`) and the end-to-end
 test on real hardware with golden images (`tests/e2e/`).
 

@@ -140,6 +140,17 @@ value in the Ultimate menu.
 | `pandoc` + `texlive-xetex` | Generate `README.pdf` (optional) | `sudo apt install pandoc texlive-xetex` |
 | Python 3 | `make test`, `make e2e` (optional) | usually preinstalled |
 
+### Getting the source
+
+The Ultimate libraries are a git submodule, so clone with
+`--recursive`:
+
+```
+git clone --recursive https://github.com/xahmol/mandelbrot-upic.git
+```
+
+or, after a plain clone, run `git submodule update --init`.
+
 ### Deploy setup
 
 Copy `.env.example` to `.env` and set `ULTIP1` to your Ultimate
@@ -171,8 +182,7 @@ cp .env.example .env
 | [`docs/MANDELBROT_ALGORITHM.md`](docs/MANDELBROT_ALGORITHM.md) | Fixed-point fractal generation algorithm |
 | [`docs/UPIC_VIEWER.md`](docs/UPIC_VIEWER.md) | The Upic border-color raster display technique |
 | [`docs/ZOOM_FEATURE.md`](docs/ZOOM_FEATURE.md) | Interactive pan/zoom/palette control scheme |
-| [`docs/TURBOCONTROL_MANUAL.md`](docs/TURBOCONTROL_MANUAL.md) | Ultimate 64 CPU speed control library |
-| [`docs/UCILIB_MANUAL.md`](docs/UCILIB_MANUAL.md) | Ultimate Command Interface (UCI) protocol library |
+| [`lib/ultimate-uci-oscar64`](https://github.com/xahmol/ultimate-uci-oscar64) | The Ultimate libraries (UCI protocol, U64 CPU speed control), included as a git submodule; manuals in its `docs/` |
 | [`docs/OSCAR64_MANUAL.md`](docs/OSCAR64_MANUAL.md) | Oscar64 compiler reference (copy of the maintainer's canonical manual) |
 | [`tests/README.md`](tests/README.md) / [`tests/e2e/README.md`](tests/e2e/README.md) | Host-side timing tests and the end-to-end test on real hardware |
 | [`CHANGELOG.md`](CHANGELOG.md) | Version history |

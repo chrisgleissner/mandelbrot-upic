@@ -1004,7 +1004,7 @@ static void render_line_pixels(void)
 // Renders one full PAL frame (256 scanlines) of upic_buffer via the
 // border-color ($D020) raster trick. Must only be called while
 // MMAP_NO_ROM is active (see upic_show_frame()) and turbo is enabled
-// (see turbo_fast(), include/turbo.h) -- at 1 MHz this loop cannot
+// (see uii_turbo_fast(), ultimate_turbo_lib.h) -- at 1 MHz this loop cannot
 // keep up with the raster beam at all.
 //
 // A named __asm block rather than a C function wrapping inline asm
@@ -1218,7 +1218,7 @@ __asm render_frame
 // on the same class; at most one loop per window can be affected.
 //
 // Each retry writes the turbo control byte again, so a machine whose
-// speed register was reset after turbo_fast() still gets there. If no
+// speed register was reset after uii_turbo_fast() still gets there. If no
 // class is accepted within 256 loops (about 20 s at 1 MHz: turbo is
 // off, e.g. the program was started without its .cfg), the probe gives
 // up and keeps the unpatched 64 MHz path, as v1.0.3 did, rather than

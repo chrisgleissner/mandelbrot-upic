@@ -11,7 +11,7 @@ since the corresponding C64U firmware hasn't been released yet.
 ******************************************************************/
 
 #include <c64/cia.h>
-#include "turbo.h"
+#include "ultimate_turbo_lib.h"
 #include "ultimate_common_lib.h"
 #include "upic_viewer.h"
 #include "mandelbrot.h"
@@ -44,9 +44,10 @@ int main(void)
 {
 	unsigned char uci_ready;
 
-	rombank_out();  // must run before turbo_set()/uii_detect() -- both live at $E000
-	// -- and before mandelbrot_generate(), which writes part of the
-	// picture to $E000 too.
+	rombank_out();  // must run before mandelbrot_generate(), which writes
+	// part of the picture to $E000 (and before anything in the $E800+
+	// upiccode pool runs). The UCI and turbo functions now come from the
+	// ultimate-uci-oscar64 library and live in the default "main" region.
 
 	// Interrupts masked globally here, for the rest of the program's
 	// entire lifetime, and never re-enabled (2026-09-11) -- root-caused
@@ -81,7 +82,7 @@ int main(void)
 	// Turbo on BEFORE generating, not just before displaying -- the
 	// whole point of doing this on-device is the 64x speedup on the
 	// escape-time iteration itself, which is by far the slow part.
-	turbo_fast();
+	uii_turbo_fast();
 
 	// One PRG for both turbo ceilings (2026-09-21): an Elite II / C64U
 	// reaches 64 MHz at speed index 15, an Ultimate 64 / Elite I only 48

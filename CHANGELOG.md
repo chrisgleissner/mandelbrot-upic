@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+- The Ultimate libraries now come from their own repository,
+  [ultimate-uci-oscar64](https://github.com/xahmol/ultimate-uci-oscar64)
+  (v1.2.0), as the git submodule `lib/ultimate-uci-oscar64`; clone with
+  `--recursive`. Replaces the project's own `ultimate_common_lib` and
+  `turbo.c` copies and their manuals (now in the library's `docs/`);
+  `turbo_fast()` becomes `uii_turbo_fast()`. The 48/64 MHz speed probe
+  stays in `upic_viewer.c`. Memory: the `$E800` pool gains 14 bytes,
+  the main region has 288 bytes free (was 323). Verified with
+  `make test` and `make e2e` on an Ultimate 64 Elite II and an Ultimate
+  64 Elite (firmware 3.15a); startup and generation times unchanged.
+
 ## [1.1.1]
 
 One `.cfg` for every machine, so C64 Ultimate owners won't need a

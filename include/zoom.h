@@ -86,7 +86,7 @@ exit path).
 //                           round-trip -- resumes exactly where it
 //                           left off, no fractal recomputation.
 //
-// Call after mandelbrot_generate() returns (rombank_out()/turbo_fast()
+// Call after mandelbrot_generate() returns (rombank_out()/uii_turbo_fast()
 // must already be active, same preconditions as upic_show_frame()).
 unsigned char zoom_select(void);
 

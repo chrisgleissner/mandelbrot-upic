@@ -47,10 +47,10 @@ behavior.
 
 ## Firmware 3.15+ features this demo is built around
 
-- **UCI cartridge-side auto-enable**: `uii_wait_for_uci()` in
-  `include/ultimate_common_lib.c` sends the unlock sequence when the
+- **UCI cartridge-side auto-enable**: `uii_wait_for_uci()` in the
+  library's `ultimate_common_lib.c` sends the unlock sequence when the
   UCI isn't already mapped (sending it while the UCI is mapped caused
-  a start-up hang -- see `docs/UCILIB_MANUAL.md`). On an Ultimate 64 Elite
+  a start-up hang -- see the library's `docs/UCILIB_MANUAL.md`). On an Ultimate 64 Elite
   (firmware 3.15) the unlock did not bring the UCI up with "Command
   Interface" disabled, so the palette is not pushed there;
   `config/MandelbrotUpic.cfg` enables the interface, alongside the
@@ -64,7 +64,20 @@ behavior.
   `SET_PALETTE_COLOR`/`RESET_PALETTE`) — this is how the generated
   fractal's palette gets pushed to real hardware colors.
 
-Full protocol reference: `docs/UCILIB_MANUAL.md`. Since this demo requires
+## Ultimate libraries (git submodule)
+
+The UCI and turbo libraries come from
+https://github.com/xahmol/ultimate-uci-oscar64, included as the git
+submodule `lib/ultimate-uci-oscar64` and pinned to a release tag
+(v1.2.0). Clone with `--recursive` or run `git submodule update --init`.
+**Never edit files inside `lib/`**: fix the library in its own
+repository, release a new tag, then check that tag out in the
+submodule and commit. This project uses `ultimate_common_lib` and
+`ultimate_turbo_lib` (`uii_turbo_fast()`); its own 48/64 MHz speed
+probe stays in `upic_viewer.c` (the patcher and `make test` depend on
+it).
+
+Full protocol reference: `lib/ultimate-uci-oscar64/docs/UCILIB_MANUAL.md`. Since this demo requires
 firmware 3.15+ unconditionally, there's no need to guard these calls
 behind a version/capability check.
 
@@ -80,8 +93,8 @@ build's own `.map` file after changing anything in this pool -- a
 clean build alone is not sufficient evidence of correct placement this
 close to the boundary.
 
-The default `main` region (`$0853`-`$1800`) has 323 bytes free in the
-current build: BSS ends at `$166D` and the stack section starts at
+The default `main` region (`$0853`-`$1800`) has 288 bytes free in the
+current build: BSS ends at `$1690` and the stack section starts at
 `$17B0`, with `stacksize` 80 (the compiler's minimum is 68). It had 0
 bytes free, with `stacksize` cut to 72, until `mandelbrot_generate()`'s
 symmetry check stopped linking Oscar64's 32-bit division runtime
@@ -118,7 +131,7 @@ and compares it with golden images.
 renderer, 48 MHz patcher and speed probe run in a small cycle-counting
 6502 emulator against a model of the U64's turbo CPU timing, and the
 committed e2e goldens are checked for consistency. Run it after any
-change to `upic_viewer.c`, `turbo.c` or region layout.
+change to `upic_viewer.c`, the library version or region layout.
 
 ## Code conventions
 

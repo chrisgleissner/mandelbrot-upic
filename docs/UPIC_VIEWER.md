@@ -183,7 +183,7 @@ answer. The 48 MHz answer rebuilds the renderer; the 64 MHz answer
 changes nothing.
 
 Each retry writes `$8F` (top speed index, badlines off) to `$D031`
-again. If the speed register was reset after `turbo_fast()`, the
+again. If the speed register was reset after `uii_turbo_fast()`, the
 probe therefore still reaches full speed instead of looping at 1 MHz.
 If no result is accepted within 256 loops (about 20 s at 1 MHz, for
 example because turbo stays off when the program is started without
@@ -278,7 +278,7 @@ call) and placed in the otherwise-idle `ovl1` overlay region
   exactly one frame. Its return value (whether SPACE is currently held)
   is unused by this project's own control scheme.
 - **`upic_select_display_path()`**: call once at startup, after
-  `rombank_out()` and `turbo_fast()`, with interrupts masked, before
+  `rombank_out()` and `uii_turbo_fast()`, with interrupts masked, before
   the first `upic_show_frame()`. Runs the speed probe and, on a 48 MHz
   machine, rebuilds the renderer (see the 48 MHz path section above).
 - **`upic_frame_quarters`**: how much of a column the generator

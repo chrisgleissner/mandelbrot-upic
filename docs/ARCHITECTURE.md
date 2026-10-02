@@ -48,10 +48,14 @@ There is no exit -- see `docs/ZOOM_FEATURE.md` for why.
   buffer. See `docs/ZOOM_FEATURE.md`.
 - **`include/rombank.c`/`.h`** -- permanent ROM-banking setup shared by
   every module that needs it.
-- **`include/turbo.c`/`.h`** -- Ultimate 64 CPU speed control. See
-  `TURBOCONTROL_MANUAL.md`.
-- **`include/ultimate_common_lib.c`/`.h`** -- UCI protocol (palette
-  control, device detection). See `UCILIB_MANUAL.md`.
+- **`lib/ultimate-uci-oscar64/`** -- the Ultimate libraries, a git
+  submodule of https://github.com/xahmol/ultimate-uci-oscar64 pinned to
+  a release tag. This project uses `ultimate_common_lib` (UCI protocol:
+  palette control, device detection) and `ultimate_turbo_lib` (U64 CPU
+  speed control); see the library's `docs/UCILIB_MANUAL.md` and
+  `docs/TURBOCONTROL_MANUAL.md`. The 48/64 MHz speed probe stays in
+  `upic_viewer.c`, since the display-path patcher and the timing tests
+  depend on it.
 
 ## Interrupts
 

@@ -184,7 +184,7 @@ To update goldens after an intended change to the picture:
     means the program has not reached the probe yet and is stuck
     earlier, in the UCI detection or palette push.
   - The UCI status is the 4 bytes at `$DF1C`-`$DF1F`; the first is the
-    status register (see `docs/UCILIB_MANUAL.md` §2). A non-zero `STATE`
+    status register (see the UCI library manual, `lib/ultimate-uci-oscar64/docs/UCILIB_MANUAL.md` §2). A non-zero `STATE`
     (bits 4-5) while the program has not reached the probe points at a
     stuck UCI handshake.
 - `got N of 8 video frames`: the video stream does not reach the host.
