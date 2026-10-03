@@ -72,18 +72,26 @@ def select(image, symbols, ratio, **kw):
     return m
 
 
-def render(mem, symbols, ratio):
+def render(mem, symbols, ratio, window=None):
     """Fill the picture, draw one frame with the generated renderer on a
-    fresh machine, return (machine, pixel writes, line reads)."""
+    fresh machine, return (machine, pixel writes, line reads). window =
+    (first row, rows) sets the library's display window directly."""
     m = Machine(mem, ratio, d031=0x8F, start_line=250)
+    if window:
+        first, rows = window
+        line = 0x18 + first
+        m.mem[symbols['uii_upic_win_first'][0]] = first
+        m.mem[symbols['uii_upic_win_end'][0]] = (first + rows) & 0xFF
+        m.mem[symbols['uii_upic_win_lo'][0]] = line & 0xFF
+        m.mem[symbols['uii_upic_win_hi'][0]] = line >> 8
     for c in range(COLUMNS):
         base = column_page(c) << 8
         for y in range(ROWS):
             m.mem[base + y] = pixel_byte(c, y)
     frame = symbols['uii_upic_frame_asm'][0]
     code_lo, code_hi = symbols['uii_upic_code']
-    # `ldy #0 / line: lda $d012`: the per-line poll.
-    line_pc = find(m.mem, frame, frame + 64, [0xA0, 0x00, 0xAD, 0x12, 0xD0]) + 2
+    # `line: lda $d012 / lw: cmp $d012 / beq lw`: the per-line poll.
+    line_pc = find(m.mem, frame, frame + 80, [0xAD, 0x12, 0xD0, 0xCD, 0x12, 0xD0, 0xF0])
     # The generated code ends with `lda #0 / sta $d020 / rts`: not a pixel.
     end_sta = find(m.mem, code_lo, code_hi, [0xA9, 0x00, 0x8D, 0x20, 0xD0, 0x60]) + 2
     m.call(frame)
@@ -93,14 +101,14 @@ def render(mem, symbols, ratio):
     return m, pixels, line_reads
 
 
-def row_dots(m, pixels, per_row):
+def row_dots(m, pixels, per_row, rows_drawn=ROWS):
     """Dot (from the start of the raster line) of every pixel write, per
     row; checks that rows are on consecutive lines."""
-    if len(pixels) != per_row * ROWS:
-        raise RowTimingError('%d pixel writes, expected %d' % (len(pixels), per_row * ROWS))
+    if len(pixels) != per_row * rows_drawn:
+        raise RowTimingError('%d pixel writes, expected %d' % (len(pixels), per_row * rows_drawn))
     first_line = m.line_of(pixels[0][0])
     rows = []
-    for k in range(ROWS):
+    for k in range(rows_drawn):
         row = pixels[k * per_row:(k + 1) * per_row]
         line = m.line_of(row[0][0])
         if line != first_line + k:
@@ -171,6 +179,23 @@ class ReleaseBuild(unittest.TestCase):
     def test_lines_have_time_left(self):
         check_slack(*self.r64, 384)
         check_slack(*self.r48, 288)
+
+    def test_window_shows_only_the_band(self):
+        # Live view Bar (upic_viewer.c): rows 124-131 only, each on the
+        # raster line it has in the full picture, same dots. Also a window
+        # below raster line 255 (rows 240-255).
+        for first, rows in ((124, 8), (240, 16)):
+            for mem, ratio, per_row, full in ((self.m64.mem, ELITE2, 384, self.r64),
+                                              (self.m48.mem, U64, 288, self.r48)):
+                m, pixels, reads = render(mem, self.symbols, ratio, (first, rows))
+                dots = row_dots(m, pixels, per_row, rows)
+                full_dots = self.dots64 if per_row == 384 else self.dots48
+                self.assertEqual(dots, full_dots[first:first + rows], (first, ratio))
+                band_line = m.line_of(pixels[0][0])
+                full_line = full[0].line_of(full[1][first * per_row][0])
+                self.assertEqual(band_line, full_line, (first, ratio))
+                self.assertEqual([v for _, v in pixels[:per_row]],
+                                 [v for _, v in full[1][first * per_row:(first + 1) * per_row]])
 
     def test_64mhz_code_overruns_at_48mhz(self):
         # Negative control: the 64 MHz renderer is too slow for a 48 MHz

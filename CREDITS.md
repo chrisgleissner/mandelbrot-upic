@@ -13,10 +13,15 @@ ordinary code) that was Aleksi Eeben's own suggestion.
 Since v1.2.0 the display is the Upic module of the ultimate-uci-oscar64
 library (`lib/ultimate-uci-oscar64`, `ultimate_upic_lib`), based on
 Aleksi Eeben's **Upic v1.3** source (`display.s`, `drawing.s`, shared with
-Xander Mol in private correspondence, 2026-10-02): the line renderer with
-per-line patched immediate operands that gives the exact one-dot pixel
-pitch, the raster-IRQ viewer, the drawing routines and the v1.3 `.upic`
-header layout used by the F1 save. `include/upic_viewer.c`/`upic_viewer.h`
+Xander Mol in private correspondence, 2026-10-02, and used with his
+permission, 2026-10-03): the line renderer with per-line patched
+immediate operands that gives the exact one-dot pixel pitch, the
+raster-IRQ viewer, the drawing routines (his ActualPlot, without Upic
+Paint's tool-panel check, at his request) and the v1.3 `.upic` header
+layout (locked 3 October 2026) used by the F1 save. The live view's
+default progress band (`V`, Bar) is his idea: show only a few lines of
+the picture from the raster interrupt while it is computed, and the
+whole picture when it is done. `include/upic_viewer.c`/`upic_viewer.h`
 and `include/rombank.c`/`rombank.h` are this program's layer over it.
 
 ## Mandelbrot fixed-point algorithm design

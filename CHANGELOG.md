@@ -15,10 +15,20 @@ Exact pixel width on every machine, and saving pictures.
   exact pitch (every 4th group patched) and now shows all 96 groups;
   both paths put every pixel on the same dots. Measured on an Ultimate
   64 Elite II and an Ultimate 64 Elite from the VIC video stream.
+- **Live view while computing** (`V` cycles, also during computation;
+  idea: Aleksi Eeben): **Bar** (default) shows only an 8-row band through
+  the middle from a raster interrupt -- a progress bar that fills left to
+  right, costing a few percent of the CPU instead of the ~25% the old
+  polled frames took -- and rolls open to the whole picture at the end;
+  **Classic** is the polled flickering view of v1.0-v1.1; **Full** shows
+  the whole picture steadily from the interrupt (about 5x slower). Uses
+  the library's display window (`uii_upic_set_window()`) and raster-IRQ
+  viewer; interrupts are on only while computing, with the program's own
+  vectors and the ROMs banked out.
 - **F1 saves the picture** as `MANDEL01.UPIC`, `MANDEL02.UPIC`, ... (first
   free number) in the Upic v1.3 format: a 256-byte header with the
-  current gradient's palette and two text lines (program version, view
-  coordinates), then the 49152-byte bitmap. Works in browse and box mode
+  current gradient's palette and text lines (program version, view
+  coordinates, "Created with ..."), then the 49152-byte bitmap. Works in browse and box mode
   (markers are left out). Falls back to the UCI home directory when the
   current one can't take files; blinks three times on an error.
 - New memory layout (`include/memmap.h`): startup-only code (renderer
@@ -27,6 +37,10 @@ Exact pixel width on every machine, and saving pictures.
   computed; the generated renderer sits at the start of the $E800 pool;
   `cy2_table`, the nybble table and the UCI buffers are in the $0200
   bss region (UCI command buffer 64 bytes, `-dUII_COMMAND_MAX=64`).
+- Memory freed for all this: palettes and the iteration -> colour table
+  copied at startup from the startup-only area into the $0200 region;
+  16-bit view arithmetic instead of 32-bit (no 32-bit multiply runtime);
+  `zoom_udiv16()` without a variable shift (no `bitshift` table).
 - README screenshots replaced with pixel-exact captures from the video
   stream (Elite II, 64 MHz path), in each gradient's own palette.
 - Tests rewritten for the library renderer (exact geometry on both

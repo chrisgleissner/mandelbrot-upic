@@ -28,19 +28,26 @@ See zoom.h for API documentation and current status.
 // zooming in only ever shrinks it), so the product tops out at
 // 384*16=6144. Only ever called with a non-negative dividend here --
 // no signed-division handling needed.
+//
+// Shifts the dividend and quotient left one bit per step instead of
+// testing bit `bit` with `dividend >> bit` (v1.2.0): a shift by a
+// variable amount made Oscar64 link its 56-byte bitshift table into
+// "main", which had no room left. Same restoring division, same results.
 static unsigned zoom_udiv16(unsigned dividend, unsigned divisor)
 {
     unsigned quotient = 0;
     unsigned remainder = 0;
-    signed char bit;
+    char i;
 
-    for (bit = 15; bit >= 0; bit--)
+    for (i = 0; i < 16; i++)
     {
-        remainder = (remainder << 1) | ((dividend >> bit) & 1);
+        remainder = (remainder << 1) | (dividend >> 15);
+        dividend <<= 1;
+        quotient <<= 1;
         if (remainder >= divisor)
         {
             remainder -= divisor;
-            quotient |= (1U << bit);
+            quotient |= 1;
         }
     }
     return quotient;
@@ -348,6 +355,7 @@ static int size_units;
 static unsigned char return_was_down = 0; // edge-detect confirm (RETURN)
 static unsigned char c_was_down = 0;      // edge-detect palette cycling ('C')
 static unsigned char f1_was_down = 0;     // edge-detect save (F1)
+static unsigned char v_was_down = 0;      // edge-detect live-view mode (V)
 static unsigned char z_was_down = 0;      // edge-detect box-mode toggle ('Z')
 static unsigned char o_was_down = 0;      // edge-detect zoom-out ('O')
 static unsigned char plus_was_down = 0;   // edge-detect grow ('+')
@@ -507,6 +515,22 @@ unsigned char zoom_select(void)
             c_was_down = 0;
         }
 
+        // Live view for the next generation: Bar -> Classic -> Full
+        // (upic_viewer.h). Takes effect when the next picture is computed;
+        // V also works during generation itself.
+        if (key_pressed(KSCAN_V))
+        {
+            if (!v_was_down)
+            {
+                v_was_down = 1;
+                upic_live_cycle();
+            }
+        }
+        else
+        {
+            v_was_down = 0;
+        }
+
         // Save the picture (F1). Like 'C', main() does the work (UCI
         // file I/O from main()'s own context, see zoom_pending_palette).
         // Markers are hidden first so they don't end up in the file;
@@ -643,8 +667,10 @@ unsigned char zoom_select(void)
                     // correctly (each zoom is always relative to what's
                     // currently displayed, not the original default
                     // overview).
-                    fixed_t new_x0 = (fixed_t)(mandel_x0 + (long)left * mandel_dx);
-                    fixed_t new_y0 = (fixed_t)(mandel_y0 + (long)top * mandel_dy);
+                    // 16-bit (v1.2.0): left/top < 384, dx/dy <= 16, see
+                    // mandelbrot_generate()'s cx0 comment.
+                    fixed_t new_x0 = (fixed_t)(mandel_x0 + left * mandel_dx);
+                    fixed_t new_y0 = (fixed_t)(mandel_y0 + top * mandel_dy);
                     fixed_t new_dx = (fixed_t)zoom_udiv16((unsigned)(width * mandel_dx), UPIC_WIDTH);
                     fixed_t new_dy = (fixed_t)zoom_udiv16((unsigned)(height * mandel_dy), UPIC_HEIGHT);
 

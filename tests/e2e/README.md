@@ -23,7 +23,7 @@ in parallel takes about 2.5 minutes. Python 3 standard library only.
 - The host must be on the same LAN as the devices and must receive
   multicast UDP. The video stream is sent to multicast group
   `239.0.1.64`. Each device gets its own UDP port (11000 for the first
-  device, 11010 for the second, and so on), and packets from any other
+  device, 11010 for the second, and so on; `--port` changes the first), and packets from any other
   source address are ignored, so several devices can stream at the
   same time. A host firewall has to allow incoming UDP on those ports.
   Unicast streaming is not used because the device intermittently
@@ -230,7 +230,8 @@ address. Set up once (tested on Windows 11 with WSL 2.7.10, firmware
 3. In mirrored mode WSL shares port numbers with Windows. A Windows
    program bound to the same UDP port (for example OBS Studio receiving
    the Ultimate's stream on 11000) makes the run fail to bind; close it
-   while testing. The device sends each stream to one destination at a
+   while testing, or run one device at a time with a free port inside
+   the rule's range (`--port 11005`). The device sends each stream to one destination at a
    time anyway.
 
 ## Files

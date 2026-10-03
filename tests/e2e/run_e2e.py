@@ -326,6 +326,9 @@ def main():
     ap.add_argument("--device", action="append", default=[],
                     help="host name or IP of an Ultimate (repeatable); default: $E2E_DEVICES")
     ap.add_argument("--prg", default=os.path.join(REPO, "build", "mandelupic.prg"))
+    ap.add_argument("--port", type=int, default=11000,
+                    help="UDP port for the first device's video stream, +10 per device (default 11000; "
+                         "pick another while OBS or another tool holds 11000; under WSL2 it must be inside the firewall rule's range)")
     ap.add_argument("--update", action="store_true", help="write the captures as the new goldens")
     ap.add_argument("--password", default=os.environ.get("ULTIMATE_PASSWORD"))
     args = ap.parse_args()
@@ -335,7 +338,7 @@ def main():
     with open(args.prg, "rb") as f:
         prg = f.read()
     symbols = load_symbols(args.prg)
-    runs = [DeviceRun(h, 11000 + 10 * i, prg, symbols, args.update, args.password)
+    runs = [DeviceRun(h, args.port + 10 * i, prg, symbols, args.update, args.password)
             for i, h in enumerate(devices)]
     threads = [threading.Thread(target=r.run) for r in runs]
     t0 = time.monotonic()

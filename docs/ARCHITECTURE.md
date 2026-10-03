@@ -28,7 +28,8 @@ own attribution.
    `program_startup()`, in the startup-only `initcode` region; `main()`
    then clears that region, which becomes picture columns 184-191.
 4. Generate the fractal (`mandelbrot_generate()`), showing it live as
-   it builds.
+   it builds: a progress band, the classic flickering build-up or the
+   steady full picture (`V`, see `docs/MANDELBROT_ALGORITHM.md`).
 5. Loop forever: let the user browse/zoom/cycle the palette or save the
    picture (`zoom_select()`); regenerate at the newly selected view on
    a confirmed zoom or pan, push the new palette on `C`, write a `.upic`

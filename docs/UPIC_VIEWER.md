@@ -18,8 +18,9 @@ color (`$D020`) once per pixel, timed against the raster beam. Each
 packed picture byte holds two pixels: its low nybble is written to
 `$D020` directly (the register uses 4 bits), its high nybble through a
 256-byte lookup table (`nyb[i] = i >> 4`). The line routine is fully
-unrolled and cycle-exact; interrupts are masked for the whole program
-(see `main.c`) so nothing can interrupt it.
+unrolled and cycle-exact. In browse mode it runs polled with interrupts
+masked; while a picture is computed in the Bar or Full live view it runs
+from the library's raster interrupt instead.
 
 ## CPU timing on the Ultimate 64
 
@@ -133,6 +134,11 @@ stays banked out for the whole program (`rombank.h`).
 - **`upic_frame_quarters`**: 4 on the 64 MHz path, 3 on the 48 MHz path.
 - **`upic_column(c)`**: byte column address.
 
+- **`upic_live_begin()` / `upic_live_column()` / `upic_live_end()` /
+  `upic_live_cycle()`**: the live view while generating (Bar, Classic,
+  Full; `V`), built on the library's raster-IRQ viewer and display
+  window. See `docs/MANDELBROT_ALGORITHM.md`.
+
 Saving (F1) uses the library's `uii_upic_save()`; see `main.c` and the
 README.
 
@@ -145,12 +151,12 @@ placed in these sections through `-d` flags in the Makefile).
 | Region | Range | Contents |
 |---|---|---|
 | `startup` | `$0801`-`$0853` | BASIC stub + Oscar64 startup code |
-| `main` | `$0853`-`$1800` | Default code/data/bss/stack: the generator, UCI and file functions, `main()`, `zoom_out_view()`. 35 bytes free (stack 80 at `$17B0`) |
+| `main` | `$0853`-`$1800` | Default code/data/bss/stack: the generator, UCI and file functions, `main()`, `zoom_out_view()`, the live view's per-column and IRQ code. 30 bytes free (stack 80 at `$17B0`) |
 | `upicbuf` | `$1800`-`$C800` | Picture columns 8-183 (reserved) |
-| `initcode` | `$C800`-`$D000` | Startup-only code: the renderer generator, the speed probe, the turbo module, `program_startup()`; afterwards picture columns 184-191 (cleared by `main()` once startup is done) |
+| `initcode` | `$C800`-`$D000` | Startup-only code and data: the renderer generator, the speed probe, the turbo module, `program_startup()`, the gradients, the color table and the constant `.upic` text lines (copied to `ovl1` at startup); afterwards picture columns 184-191 (cleared by `main()` once startup is done) |
 | `picreloc` | `$E000`-`$E800` | Picture columns 0-7 |
-| `upiccode` | `$E800`-`$10000` | The generated renderer (`upicgen`, 2440 bytes, first so it starts page-aligned at `$E800`), `zoom.c`, `sq_table`, `save_picture()`; 53 bytes free |
-| `ovl1` | `$0200`-`$0800` | bss only: the nybble table (`$0300`), `cy2_table`, the UCI buffers (command buffer shrunk to 64 bytes with `-dUII_COMMAND_MAX=64`), the save text |
+| `upiccode` | `$E800`-`$10000` | The generated renderer (`upicgen`, 2440 bytes, first so it starts page-aligned at `$E800`), `zoom.c`, `sq_table`, `save_picture()`, `upic_live_end()`/`upic_live_cycle()`, the library's display and file code; 82 bytes free |
+| `ovl1` | `$0200`-`$0800` | bss only: the nybble table (`$0300`), `cy2_table`, the UCI buffers (command buffer shrunk to 64 bytes with `-dUII_COMMAND_MAX=64`), the save text, the RAM copies of the gradients and the color table |
 
 `ovl1` is declared as an Oscar64 overlay region on purpose: a plain
 region below `$0801` moved the `.prg`'s load address to `$0002`

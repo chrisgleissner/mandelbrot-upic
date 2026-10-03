@@ -4,6 +4,7 @@ See mandelbrot.h for API documentation and current status.
 ******************************************************************/
 
 #include <c64/cia.h>
+#include <string.h>
 #include "mandelbrot.h"
 
 // Set at the end of mandelbrot_generate() from CIA1's TOD clock
@@ -417,10 +418,18 @@ static unsigned char mandel_iterate(fixed_t cx, fixed_t cy, fixed_t xm, fixed_t 
 // (index 8, chosen so `ZOOM_MARKER_COLOR_INDEX` can be one constant).
 // The marker-collision tradeoff described above is unaffected by
 // which numbered color white happens to be.
-static const unsigned char mandel_color_table[MANDEL_MAX_ITER] = {
+// Stored in the startup-only data (initdata, memmap.h) and copied once
+// into mandel_color_table[] in the $0200 bss region by
+// mandel_tables_init() (v1.2.0): "main" had no room left for the data.
+#pragma data(initdata)
+static const unsigned char mandel_color_init[MANDEL_MAX_ITER] = {
     1,  1,  2,  2,  3,  3,  4,  4,  5,  5,  5,  6,  6,  7,  7,  8,
     8,  9,  9,  9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15, 15,
 };
+#pragma data(data)
+#pragma bss(bssovl1)
+static unsigned char mandel_color_table[MANDEL_MAX_ITER];
+#pragma bss(bss)
 
 static unsigned char mandel_color(unsigned char iter)
 {
@@ -493,6 +502,10 @@ void mandelbrot_generate(void)
     cia1.tods = 0;
     cia1.todm = 0;
 
+    // Live view (upic_viewer.h): Bar or Full start the raster-IRQ viewer
+    // here; Classic shows polled frames from the row loop below.
+    upic_live_begin();
+
     // A view is mirror-eligible only if row 0 and row (HEIGHT-1) are
     // exact negatives of each other in Q5.11 -- true BY CONSTRUCTION
     // for the default view's mandel_y0 (see its own comment), but a
@@ -528,15 +541,24 @@ void mandelbrot_generate(void)
     // ROW COUNT (half_height) differs.
     for (y = 0; y < half_height; y++)
     {
-        fixed_t cy = (fixed_t)(mandel_y0 + (long)y * mandel_dy);
+        fixed_t cy = (fixed_t)(mandel_y0 + (int)y * mandel_dy);
         cy2_table[y] = fixed_sqr(cy);
     }
 
     for (bytecol = 0; bytecol < UPIC_WIDTH / 2; bytecol++)
     {
-        fixed_t cx0 = (fixed_t)(mandel_x0 + (long)(bytecol * 2) * mandel_dx);
+        // 16-bit products (v1.2.0, were long): bytecol * 2 <= 382 and
+        // mandel_dx <= 16 (zoom.c clamps it to the default overview's
+        // step), so the product is <= 6112 and the sum stays inside the
+        // default view (-4096..2048). Dropping the long multiplies drops
+        // Oscar64's 32-bit multiply runtime (mul32/mul32by8, ~160 bytes
+        // of "main").
+        fixed_t cx0 = (fixed_t)(mandel_x0 + (int)(bytecol * 2) * mandel_dx);
         fixed_t cx1 = (fixed_t)(cx0 + mandel_dx);
         volatile char *dst = upic_column((char)bytecol);
+        // Handles a V press (switching the live view mid-generation) and
+        // says whether this column shows Classic polled frames.
+        char classic = upic_live_column((char)bytecol);
 
         // Cardioid/bulb terms that depend only on this column's cx,
         // not on the row -- same hoisting idea as cy2_table above, the
@@ -558,7 +580,7 @@ void mandelbrot_generate(void)
         // (every row genuinely is unique data).
         for (y = 0; y < half_height; y++)
         {
-            fixed_t cy = (fixed_t)(mandel_y0 + (long)y * mandel_dy);
+            fixed_t cy = (fixed_t)(mandel_y0 + (int)y * mandel_dy);
             fixed_t cy2 = cy2_table[y];
             unsigned char even = mandel_color(mandel_iterate(cx0, cy, xm0, xm0_2, xp10_2, cy2));
             unsigned char odd  = mandel_color(mandel_iterate(cx1, cy, xm1, xm1_2, xp11_2, cy2));
@@ -573,18 +595,30 @@ void mandelbrot_generate(void)
             // in main() (after this function returns), not generation
             // itself -- a SPACE press mid-generation is just
             // consumed/ignored by this call, same as any other key.
-            work += 4;
-            if (work >= work_per_frame)
+            if (classic)
             {
-                work -= work_per_frame;
-                upic_show_frame();
+                work += 4;
+                if (work >= work_per_frame)
+                {
+                    work -= work_per_frame;
+                    upic_show_frame();
+                }
             }
         }
     }
 
-    mandel_gen_tenths = cia1.todt;
+    char tenths = cia1.todt;
     mandel_gen_secs   = cia1.tods;
     mandel_gen_mins   = cia1.todm;
+
+    // Bar: roll the band open to the whole picture; then interrupts off
+    // again for browse mode (not counted in the generation time above).
+    upic_live_end();
+
+    // Stored last: tests/ and tests/e2e treat mandel_gen_tenths != $FF as
+    // "picture complete, browse mode running", so it must not be written
+    // before the roll-out has finished.
+    mandel_gen_tenths = tenths;
 }
 
 // "Sunset": black -> indigo -> blue -> pale -> gold -> orange -> deep
@@ -632,6 +666,12 @@ void mandelbrot_generate(void)
 //    disc, not a monotonic white climb) instead of mirroring the same
 //    arc both ways. Built from two keyframe sequences resampled at
 //    equal RGB arc-length, same technique as every gradient below.
+// The four gradients below are stored in the startup-only data
+// (initdata) and copied once into mandel_palette_ram[] in the $0200 bss
+// region by mandel_tables_init() (v1.2.0); mandel_palettes[] points at
+// the copies. mandelbrot_palette itself is only used at startup (main.c)
+// and by the tests, which read it from the PRG file.
+#pragma data(initdata)
 const char mandelbrot_palette[48] = {
     0x00,0x00,0x00,    //  0: black (in the set)
     0x19,0x04,0x27,    //  1
@@ -758,9 +798,33 @@ const char mandel_palette_rainbow[48] = {
 // pointers rather than a 2D array so mandelbrot_palette itself stays
 // its own named symbol (main.c already references it directly) while
 // also being reachable through this table for cycling.
-const char *const mandel_palettes[MANDEL_PALETTE_COUNT] = {
+static const char *const mandel_palette_init[MANDEL_PALETTE_COUNT] = {
     mandelbrot_palette,
     mandel_palette_fire,
     mandel_palette_amethyst,
     mandel_palette_rainbow,
 };
+#pragma data(data)
+
+#pragma bss(bssovl1)
+static char mandel_palette_ram[MANDEL_PALETTE_COUNT * 48];
+#pragma bss(bss)
+
+const char *const mandel_palettes[MANDEL_PALETTE_COUNT] = {
+    mandel_palette_ram,
+    mandel_palette_ram + 48,
+    mandel_palette_ram + 96,
+    mandel_palette_ram + 144,
+};
+
+// Startup only (initcode): fill the RAM copies above from initdata,
+// before the first picture overwrites it.
+#pragma code(initcode)
+__noinline void mandel_tables_init(void)
+{
+    char i;
+    for (i = 0; i < MANDEL_PALETTE_COUNT; i++)
+        memcpy(mandel_palette_ram + i * 48, mandel_palette_init[i], 48);
+    memcpy(mandel_color_table, mandel_color_init, MANDEL_MAX_ITER);
+}
+#pragma code(code)

@@ -21,6 +21,11 @@ since the corresponding C64U firmware hasn't been released yet.
 #include "rombank.h"
 #include "zoom.h"
 
+// 160 bytes of header text, in the $0200 bss region (memmap.h).
+#pragma bss(bssovl1)
+static char save_text[160];
+#pragma bss(bss)
+
 // ---------------------------------------------------------------
 // Startup (initcode, memmap.h): runs once, before the first picture;
 // the same RAM is picture columns 184-191 afterwards.
@@ -50,10 +55,27 @@ static void setpalette_retry(const char *rgb48)
 	}
 }
 
+// The constant lines of the .upic text (Upic v1.3: four ASCII lines of
+// 40, space-filled): line 1 program and version, line 4 "Created with"
+// as Aleksi Eeben suggested for it. Built once into save_text here, from
+// strings in the startup-only data, so they cost no runtime memory.
+static const char save_line1[] = "MANDELBROT UPIC " VERSION;
+static const char save_line4[] = "Created with Xander's Mandelbrot Upic";
+
+static void save_text_init(void)
+{
+	memset(save_text, 0x20, 160);
+	memcpy(save_text, save_line1, sizeof(save_line1) - 1 < 40 ? sizeof(save_line1) - 1 : 40);
+	memcpy(save_text + 120, save_line4, sizeof(save_line4) - 1);
+}
+
 // Returns whether the UCI answered (palette pushed).
 __noinline static unsigned char program_startup(void)
 {
 	unsigned char uci_ready = uii_wait_for_uci(5);
+
+	mandel_tables_init();       // palettes/color table into RAM (initdata copies)
+	save_text_init();           // constant lines of the .upic text
 
 	// Palette pushed before generation -- mandelbrot_generate() shows
 	// the picture LIVE as it builds (see its own comment), which needs
@@ -97,10 +119,6 @@ __noinline static unsigned char program_startup(void)
 // in the UCI home directory. The screen stays black while the file is
 // written; on an error the picture blinks three times.
 
-// 160 bytes of header text, in the $0200 bss region (memmap.h).
-#pragma bss(bssovl1)
-static char save_text[160];
-#pragma bss(bss)
 
 // In the $E800 pool (memmap.h): "main" has no room left for it.
 #pragma code(upiccode)
@@ -118,15 +136,16 @@ static char *put_hex(char *p, unsigned v)
 	return p + 1;                              // one space between fields
 }
 
-static char save_picture(const char *palette)
+// __noinline: called once, so Oscar64 -O2 would inline it into main() and
+// lose this #pragma code (the "main" region has no room for it).
+__noinline static char save_picture(const char *palette)
 {
 	static char name[] = "MANDEL00.UPIC";
-	static const char title[] = "MANDELBROT UPIC " VERSION;
 	char home_tried = 0;
 	char *p;
 
-	memset(save_text, 0x20, 160);
-	memcpy(save_text, title, sizeof(title) - 1 < 40 ? sizeof(title) - 1 : 40);
+	// Lines 1 and 4 are filled once at startup (save_text_init()); only
+	// the view on line 2 changes.
 	p = put_hex(save_text + 40, (unsigned)mandel_x0);
 	p = put_hex(p, (unsigned)mandel_y0);
 	p = put_hex(p, (unsigned)mandel_dx);

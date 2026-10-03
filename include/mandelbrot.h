@@ -128,6 +128,11 @@ extern const char mandelbrot_palette[48];
 #define MANDEL_PALETTE_COUNT 4
 extern const char *const mandel_palettes[MANDEL_PALETTE_COUNT];
 
+// Startup only (initcode, memmap.h): copies the gradients and the
+// iteration -> color table from the startup-only data into RAM. Call
+// before anything uses mandel_palettes[] or mandelbrot_generate().
+void mandel_tables_init(void);
+
 // Generation time, captured from CIA1's TOD clock at the end of
 // mandelbrot_generate() -- read back via ultimate_read_memory after a
 // run for an objective timing measurement (no on-screen readout yet).

@@ -41,6 +41,31 @@ void upic_select_display_path(void);
 // share of frames. 4 at 64 MHz, 3 at 48 MHz (a column takes 4/3 as long).
 extern unsigned char upic_frame_quarters;
 
+// ---------------------------------------------------------------
+// Live view during generation (v1.2.0, idea: Aleksi Eeben)
+// ---------------------------------------------------------------
+// UPIC_LIVE_BAR     (default) the raster-IRQ viewer shows only rows
+//                   124-131 of the picture: a band that fills left to
+//                   right as columns are computed, a progress bar
+//                   costing ~3% of the CPU; it rolls open to the whole
+//                   picture when generation ends.
+// UPIC_LIVE_CLASSIC the polled live view of v1.0-v1.1: a frame every
+//                   column of work (flickers; ~25% of the time).
+// UPIC_LIVE_FULL    the raster-IRQ viewer shows the whole picture:
+//                   steady, no flicker, but generation takes ~5x as long
+//                   (the display takes 256 of every 312 lines).
+// V cycles the mode, in browse/box mode (zoom.c) and during generation.
+#define UPIC_LIVE_BAR     0
+#define UPIC_LIVE_CLASSIC 1
+#define UPIC_LIVE_FULL    2
+
+extern unsigned char upic_live_mode;
+
+void upic_live_begin(void);              // start of mandelbrot_generate()
+char upic_live_column(char bytecol);     // per column; nonzero: classic mode
+void upic_live_end(void);                // end of generation: roll out, IRQ off
+void upic_live_cycle(void);              // next mode (V)
+
 #pragma compile("upic_viewer.c")
 
 #endif

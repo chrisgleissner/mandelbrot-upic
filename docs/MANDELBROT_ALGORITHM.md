@@ -126,15 +126,39 @@ truncated. The earlier signed 32-bit division was
 the only user of Oscar64's 32-bit division runtime (about 310 bytes of
 the default `main` region); replacing it freed about 400 bytes there.
 
-## Live build-up while generating
+## Live view while generating
 
-`mandelbrot_generate()` calls `upic_show_frame()` while it computes,
-so the picture visibly builds up left-to-right as it's computed rather
-than appearing all at once. Each call shows the picture for one PAL
-frame; between calls the CPU computes and the picture is not shown.
-The picture therefore flickers during generation. This is a deliberate
-choice, not a defect: see the comment at the top of
-`mandelbrot_generate()`.
+Since v1.2.0 there are three live views (`upic_live_mode`, cycled with
+`V` in browse mode and during generation; see `upic_viewer.c`). The idea
+for the default one came from Aleksi Eeben.
+
+| Mode | How | Generation time, overview |
+|---|---|---|
+| Bar (default) | The library's raster-IRQ viewer with a display window of rows 124-131 (`uii_upic_set_window()`): an 8-line band through the main axis that fills left to right. At the end the band rolls open, 8 rows per frame, to the whole picture | 9.3 s on an Elite (48 MHz) |
+| Classic | The polled frames of v1.0-v1.1, see below | 15.1 s |
+| Full | The raster-IRQ viewer showing the whole picture: steady, but the display takes 256 of every 312 lines | 52 s |
+
+(Measured on an Ultimate 64 Elite, 2026-10-03, with the CIA TOD clock;
+the roll-out is not counted.) The band is cleared where nothing is
+computed yet when Bar is entered, so it starts as an empty bar. The
+interrupt runs only while generating: the ROMs are banked out, `$FFFE`
+and `$FFFA` point at the library's handler and an `RTI`, and CIA1 timer
+interrupts are off, so the KERNAL/JiffyDOS handler that made `main.c`
+mask interrupts is never reached. At the end of every frame the handler
+calls `upic_live_hook`, a few lines of assembly that read the `V` key
+straight from the keyboard matrix (no zero page: it interrupts C code);
+in Classic mode the generator calls it once per column instead.
+
+The generator writes `mandel_gen_tenths` after the roll-out (the tests
+read it as "picture complete").
+
+### Classic
+
+In Classic mode `mandelbrot_generate()` calls `upic_show_frame()` while
+it computes, so the picture visibly builds up left-to-right as it's
+computed rather than appearing all at once. Each call shows the picture
+for one PAL frame; between calls the CPU computes and the picture is not
+shown. The picture therefore flickers during generation.
 
 Live frames are paced by work done, not by columns. Every computed row
 adds 4 to a work counter, so a whole column adds 4 times its row

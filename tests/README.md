@@ -20,7 +20,7 @@ The end-to-end test on real hardware (`make e2e`) lives in `e2e/`; see
 |---|---|
 | `mos6502.py` | Cycle-counting NMOS 6502 emulator (documented opcodes, page-crossing and branch penalties, the dummy read of indexed accesses). Raises on undocumented opcodes and decimal mode. |
 | `machine.py` | Loads a PRG plus `.map` and models the Ultimate 64's turbo CPU timing, raster counter and `$D020`/`$D031` registers. |
-| `test_turbo_modes.py` | 12 tests for the 48 MHz / 64 MHz display paths (the library's generated Upic renderer) and the speed probe in `upic_select_display_path()`. |
+| `test_turbo_modes.py` | 13 tests for the 48 MHz / 64 MHz display paths (the library's generated Upic renderer) and the speed probe in `upic_select_display_path()`. |
 | `test_e2e_goldens.py` | 4 consistency checks on the committed end-to-end golden images (no hardware needed). |
 
 ## Timing model
@@ -87,6 +87,9 @@ errors of the old in-project renderer, which the library replaced.
   exactly on its ideal dot, every pixel within one dot of it (a group is
   24 cycles = 4.085 dots), and pixel 0 on the same dot as on the 64 MHz
   path.
+- Display window (the live view's Bar, v1.2.0): rows 124-131 and rows
+  240-255 (lines past 255) on both paths draw only those rows, each on
+  the raster line and dots it has in the full frame.
 - force48 build (Elite II at index 14): the 48 MHz renderer is built,
   every row shows 288 pixels on its own line in the 4m / 4m+2 / 4m+3
   order; the probe is not linked.

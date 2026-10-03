@@ -32,6 +32,7 @@ interactive zoom.
 ## Contents
 
 - [Controls](#controls)
+  - [Live view](#live-view)
   - [Saving pictures](#saving-pictures)
 - [Installation](#installation)
 - [Building from source](#building-from-source)
@@ -52,6 +53,7 @@ live, left to right. Once it completes, you're in **browse mode**:
 | `O` | Zoom out one notch (widens the view, clamped to the original overview) |
 | `C` | Cycle the base color gradient (sunset, fire, amethyst, rainbow) |
 | `F1` | Save the picture as `MANDELnn.UPIC` (see [Saving pictures](#saving-pictures)) |
+| `V` | Cycle the live view used while a picture is computed: bar, classic, full (see [Live view](#live-view)) |
 
 Panning regenerates the fractal at the same zoom level, shifted --
 each step is a fraction of the current view's own size, so it moves
@@ -77,7 +79,7 @@ blocks) appear, outlining a box that always keeps the picture's own
 | `-` | Shrink the box (aspect ratio unchanged) |
 | `RETURN` | Confirm and zoom into the box |
 | `Z` | Cancel back to browse mode without zooming |
-| `C` / `O` / `F1` | Same as browse mode (F1 saves without the markers) |
+| `C` / `O` / `F1` / `V` | Same as browse mode (F1 saves without the markers) |
 
 Confirming regenerates the fractal at the selected region and returns
 to browse mode. Repeated zooms compose relative to whatever's
@@ -96,6 +98,20 @@ implementation, not a bug -- see `docs/MANDELBROT_ALGORITHM.md`.
 **No quit key** -- reset or power off to exit, same as many C64 demos
 with no graceful exit path. See `docs/ZOOM_FEATURE.md` for why.
 
+### Live view
+
+While a picture is computed you see one of three live views; `V` cycles
+through them, also while the picture is being computed:
+
+| View | What you see | Time for the first picture (Elite II) |
+|---|---|---|
+| Bar (default) | An 8-line band through the middle of the picture fills from left to right as a progress bar, then rolls open to the whole picture | fastest |
+| Classic | The picture builds up in full, flickering (the live view of v1.0-v1.1) | as before |
+| Full | The picture builds up in full and steady, without flicker | about 5x slower: showing it takes most of the CPU |
+
+Bar and Full show the picture from a raster interrupt (Aleksi Eeben's
+idea and viewer); Classic draws a frame between columns.
+
 ### Saving pictures
 
 `F1` saves the picture shown -- without the zoom box markers -- as
@@ -106,8 +122,9 @@ or its home directory when the current one can't take files (after a
 reset that can be the virtual root `/`).
 
 The file is a Upic v1.3 picture: a 256-byte header (with the active
-gradient's palette, and two text lines: the program version and the view
-coordinates) followed by the 49152-byte bitmap. Aleksi Eeben's Upic
+gradient's palette and three text lines: the program version, the view
+coordinates and "Created with Xander's Mandelbrot Upic") followed by the
+49152-byte bitmap. Aleksi Eeben's Upic
 tools use this format; the bitmap part is the same as the `.upic` files
 of his Upic Image Converter.
 

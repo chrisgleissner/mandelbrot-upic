@@ -93,18 +93,23 @@ flags in the Makefile's `UPICFLAGS`). See `docs/UPIC_VIEWER.md`'s
 
 The shared `upiccode`/`moddata`/`modbss`/`upicgen` pool
 (`$E800`-`$FFFF`) holds the generated Upic renderer (first, so it starts
-page-aligned), zoom code, `sq_table` and the save code; 53 bytes free. Oscar64's linker can, in rare cases, silently wrap an object's
+page-aligned), zoom code, `sq_table`, the save code and part of the
+live view; 82 bytes free. Oscar64's linker can, in rare cases, silently wrap an object's
 address past `$10000` back down near `$0000` instead of raising a
 placement error. Always verify actual object placement via the
 build's own `.map` file after changing anything in this pool -- a
 clean build alone is not sufficient evidence of correct placement this
 close to the boundary.
 
-The default `main` region (`$0853`-`$1800`) has 35 bytes free in the
-current build: BSS ends at `$178D` and the stack section starts at
-`$17B0`, with `stacksize` 80 (the compiler's minimum is 68). A 32-bit
-division -- or a plain 8-bit `/` or `%` (`divmod`, ~140 bytes) --
-anywhere in the program links a division runtime in. Check the `.map`
+The default `main` region (`$0853`-`$1800`) has 30 bytes free in the
+current build: BSS ends at `$1792` and the stack section starts at
+`$17B0`, with `stacksize` 80 (the compiler's minimum is 68). Room for
+the live view (v1.2.0) came from copying the gradients and color table
+out of startup-only data (`initdata`) into `ovl1`, 16-bit view
+arithmetic and a `zoom_udiv16()` without a variable shift. A 32-bit
+division or multiply, a plain 8-bit `/` or `%` (`divmod`, ~140 bytes),
+or a shift by a variable amount (`bitshift` table, 56 bytes) anywhere in
+the program links a runtime in. Check the `.map`
 after adding anything there; the linker reports "Cannot place stack
 section" when it overflows. When a build fails, the old `.map` stays:
 to measure an overflow, build once with the region temporarily
@@ -112,8 +117,9 @@ enlarged.
 
 Startup-only code goes in `initcode` (`$C800`-`$CFFF`, the last 8
 picture columns, overwritten by the first generation): the Upic
-renderer generator, the speed probe, the turbo module and
-`program_startup()`. Nothing there may be called after startup. Oscar64
+renderer generator, the speed probe, the turbo module,
+`program_startup()` and the `initdata` copies of the gradients, color
+table and constant `.upic` text. Nothing there may be called after startup. Oscar64
 inlines a static function called once into its caller, losing its
 `#pragma code` -- keep such functions `__noinline`.
 
