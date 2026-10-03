@@ -103,11 +103,11 @@ with no graceful exit path. See `docs/ZOOM_FEATURE.md` for why.
 While a picture is computed you see one of three live views; `V` cycles
 through them, also while the picture is being computed:
 
-| View | What you see | Time for the first picture (Elite II) |
+| View | What you see | First picture, Elite II |
 |---|---|---|
-| Bar (default) | An 8-line band through the middle of the picture fills from left to right as a progress bar, then rolls open to the whole picture | fastest |
-| Classic | The picture builds up in full, flickering (the live view of v1.0-v1.1) | as before |
-| Full | The picture builds up in full and steady, without flicker | about 5x slower: showing it takes most of the CPU |
+| Bar (default) | An 8-line band through the middle of the picture fills from left to right as a progress bar, then rolls open to the whole picture | 6.9 s |
+| Classic | The picture builds up in full, flickering (the live view of v1.0-v1.1) | 11.2 s |
+| Full | The picture builds up in full and steady, without flicker | 38.8 s: showing it takes most of the CPU |
 
 Bar and Full show the picture from a raster interrupt (Aleksi Eeben's
 idea and viewer); Classic draws a frame between columns.

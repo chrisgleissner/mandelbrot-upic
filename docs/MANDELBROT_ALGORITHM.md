@@ -132,14 +132,16 @@ Since v1.2.0 there are three live views (`upic_live_mode`, cycled with
 `V` in browse mode and during generation; see `upic_viewer.c`). The idea
 for the default one came from Aleksi Eeben.
 
-| Mode | How | Generation time, overview |
+| Mode | How | Generation time, overview (Elite / Elite II) |
 |---|---|---|
-| Bar (default) | The library's raster-IRQ viewer with a display window of rows 124-131 (`uii_upic_set_window()`): an 8-line band through the main axis that fills left to right. At the end the band rolls open, 8 rows per frame, to the whole picture | 9.3 s on an Elite (48 MHz) |
-| Classic | The polled frames of v1.0-v1.1, see below | 15.1 s |
-| Full | The raster-IRQ viewer showing the whole picture: steady, but the display takes 256 of every 312 lines | 52 s |
+| Bar (default) | The library's raster-IRQ viewer with a display window of rows 124-131 (`uii_upic_set_window()`): an 8-line band through the main axis that fills left to right. At the end the band rolls open, 8 rows per frame, to the whole picture | 9.3 s / 6.9 s |
+| Classic | The polled frames of v1.0-v1.1, see below | 15.1 s / 11.2 s |
+| Full | The raster-IRQ viewer showing the whole picture: steady, but the display takes 256 of every 312 lines | 52 s / 38.8 s |
 
-(Measured on an Ultimate 64 Elite, 2026-10-03, with the CIA TOD clock;
-the roll-out is not counted.) The band is cleared where nothing is
+(Measured on an Ultimate 64 Elite at 48 MHz and an Elite II at 64 MHz,
+2026-10-03, with the CIA TOD clock; the roll-out is not counted.) In
+Classic mode `V` is read once per column (about 60 ms), so a very short
+tap can be missed; a normal key press is seen. The band is cleared where nothing is
 computed yet when Bar is entered, so it starts as an empty bar. The
 interrupt runs only while generating: the ROMs are banked out, `$FFFE`
 and `$FFFA` point at the library's handler and an `RTI`, and CIA1 timer
