@@ -69,10 +69,12 @@ behavior.
 The UCI and turbo libraries come from
 https://github.com/xahmol/ultimate-uci-oscar64, included as the git
 submodule `lib/ultimate-uci-oscar64` and pinned to a release tag
-(v1.2.0). Clone with `--recursive` or run `git submodule update --init`.
+(v1.3.0). Clone with `--recursive` or run `git submodule update --init`.
 **Never edit files inside `lib/`**: fix the library in its own
 repository, release a new tag, then check that tag out in the
-submodule and commit. This project uses `ultimate_common_lib` and
+submodule and commit. This project uses `ultimate_common_lib`,
+`ultimate_dos_lib` (file I/O for F1 save), `ultimate_upic_lib` (the
+Upic display, raster-IRQ viewer and display window, `.upic` save) and
 `ultimate_turbo_lib` (`uii_turbo_fast()`, and `uii_turbo_probe_max()`
 for the 48/64 MHz speed probe in `upic_select_display_path()` -- a
 port of the probe Christian Gleissner first wrote here).
@@ -134,11 +136,14 @@ a renderer generated at startup. `tests/test_turbo_modes.py` checks its
 geometry and line budget in the timing model; `make e2e` checks it on
 hardware.
 
-Interrupts are masked globally for the program's entire lifetime (see
-`main.c`'s own comment) -- this program has no functional need for a
-real interrupt, and this avoids a real class of bug where a same-tick
-hardware interrupt chains into genuine KERNAL/JiffyDOS ROM code while
-this program's own direct-CIA keyboard polling is active.
+Interrupts are masked for the program's lifetime (see `main.c`'s own
+comment) -- avoiding a real class of bug where a same-tick hardware
+interrupt chains into genuine KERNAL/JiffyDOS ROM code while this
+program's own direct-CIA keyboard polling is active -- except while a
+picture is computed in the Bar or Full live view: then the library's
+raster interrupt runs, with its own vectors, the ROMs banked out and
+CIA1 timer interrupts off, and it masks interrupts again at the end
+(`upic_live_end()`).
 
 ## Testing
 

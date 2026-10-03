@@ -159,6 +159,14 @@ char upic_live_column(char bytecol)
 {
 	if (upic_live_mode == UPIC_LIVE_CLASSIC)
 		__asm { jsr upic_live_hook }
+	else if (upic_live_mode == UPIC_LIVE_BAR)
+		// Progress cursor: the band rows of the column about to be
+		// computed in white (both pixels color 8, white in every
+		// gradient), so the bar's front edge shows even where the
+		// picture is black. The generator overwrites these rows with
+		// the real pixels as it computes the column (it always writes
+		// all 256 rows), so the cursor needs no clearing.
+		memset(upic_column(bytecol) + BAND_FIRST, 0x88, BAND_ROWS);
 	if (live_request)
 	{
 		live_request = 0;

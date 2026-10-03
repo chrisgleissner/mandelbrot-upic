@@ -1,8 +1,16 @@
 # Changelog
 
-## [1.2.0]
+## [1.2.0] - 2026-10-03
 
-Exact pixel width on every machine, and saving pictures.
+Exact pixel width on every machine, a live view that no longer costs a
+quarter of the CPU, and saving pictures.
+
+**Code contributed by Aleksi Eeben** (creator of Upic): the display, the
+raster-interrupt viewer, the drawing routines and the `.upic` v1.3 file
+format in this release are based on his Upic v1.3 source (`display.s`,
+`drawing.s`), which he shared and allowed to be published in the
+ultimate-uci-oscar64 library; the Bar live view is his idea. Thank you,
+Aleksi!
 
 - **Exact pixel pitch.** Every pixel is now exactly one dot wide and the
   picture fills the whole 384-dot visible area: until v1.1.1 a pixel was
@@ -20,8 +28,11 @@ Exact pixel width on every machine, and saving pictures.
   the middle from a raster interrupt -- a progress bar that fills left to
   right, costing a few percent of the CPU instead of the ~25% the old
   polled frames took -- and rolls open to the whole picture at the end;
-  **Classic** is the polled flickering view of v1.0-v1.1; **Full** shows
-  the whole picture steadily from the interrupt (about 5x slower). Uses
+  a white cursor marks the column being computed, so the bar's front
+  edge shows even over black; **Classic** is the polled flickering view
+  of v1.0-v1.1; **Full** shows the whole picture steadily from the
+  interrupt. Default overview, Elite II / Elite: Bar 6.9 s / 9.3 s,
+  Classic 11.2 s / 15.1 s, Full 38.8 s / 52 s. Uses
   the library's display window (`uii_upic_set_window()`) and raster-IRQ
   viewer; interrupts are on only while computing, with the program's own
   vectors and the ROMs banked out.
@@ -42,14 +53,15 @@ Exact pixel width on every machine, and saving pictures.
   16-bit view arithmetic instead of 32-bit (no 32-bit multiply runtime);
   `zoom_udiv16()` without a variable shift (no `bitshift` table).
 - README screenshots replaced with pixel-exact captures from the video
-  stream (Elite II, 64 MHz path), in each gradient's own palette.
+  stream, in each gradient's own palette: every picture now shown on
+  both the 64 MHz path (Elite II) and the 48 MHz path (Elite).
 - Tests rewritten for the library renderer (exact geometry on both
   paths, line budget, probe); golden images regenerated. The e2e test
   now counts any unexpected error in a device's run as a failure (a
   crashed run used to pass).
 - The Ultimate libraries now come from their own repository,
   [ultimate-uci-oscar64](https://github.com/xahmol/ultimate-uci-oscar64)
-  (v1.2.0), as the git submodule `lib/ultimate-uci-oscar64`; clone with
+  (v1.3.0), as the git submodule `lib/ultimate-uci-oscar64`; clone with
   `--recursive`. Replaces the project's own `ultimate_common_lib` and
   `turbo.c` copies and their manuals (now in the library's `docs/`);
   `turbo_fast()` becomes `uii_turbo_fast()`. Verified with `make test`

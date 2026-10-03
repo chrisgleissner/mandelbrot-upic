@@ -142,7 +142,10 @@ for the default one came from Aleksi Eeben.
 2026-10-03, with the CIA TOD clock; the roll-out is not counted.) In
 Classic mode `V` is read once per column (about 60 ms), so a very short
 tap can be missed; a normal key press is seen. The band is cleared where nothing is
-computed yet when Bar is entered, so it starts as an empty bar. The
+computed yet when Bar is entered, so it starts as an empty bar, and the
+band rows of the column about to be computed are set to white (color 8 in
+every gradient): a cursor that shows the bar's front edge even over
+black, overwritten by the real pixels as the column is computed. The
 interrupt runs only while generating: the ROMs are banked out, `$FFFE`
 and `$FFFA` point at the library's handler and an `RTI`, and CIA1 timer
 interrupts are off, so the KERNAL/JiffyDOS handler that made `main.c`

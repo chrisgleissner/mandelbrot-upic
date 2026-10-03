@@ -1,6 +1,8 @@
 # Mandelbrot Upic
 
-![The Mandelbrot set at the default overview, default blue/orange palette, on real Ultimate 64 hardware](screenshots/default-palette.png)
+| 64 MHz (Elite II, C64 Ultimate) | 48 MHz (U64, Elite; 3 of 4 pixels) |
+|---|---|
+| ![The Mandelbrot set at the default overview, default sunset palette, 64 MHz](screenshots/default-palette.png) | ![The Mandelbrot set at the default overview, default sunset palette, 48 MHz](screenshots/default-palette-48mhz.png) |
 
 An Ultimate 64 demo that generates a Mandelbrot fractal
 on-device at 64 MHz turbo, packs it directly into Upic format (a
@@ -61,15 +63,19 @@ less in absolute terms the deeper you've zoomed in.
 
 The 4 selectable gradients:
 
-![Fire palette: black, deep red, orange, yellow, white](screenshots/fire-palette.png)
-![Amethyst palette: black, deep violet, vivid magenta, hot pink, pale pink](screenshots/amethyst-palette.png)
-![Rainbow palette: red, orange, yellow, green, cyan, blue, violet, magenta](screenshots/rainbow-palette.png)
+| 64 MHz (Elite II, C64 Ultimate) | 48 MHz (U64, Elite; 3 of 4 pixels) |
+|---|---|
+| ![Fire palette: black, deep red, orange, yellow, white, 64 MHz](screenshots/fire-palette.png) | ![Fire palette: black, deep red, orange, yellow, white, 48 MHz](screenshots/fire-palette-48mhz.png) |
+| ![Amethyst palette: black, deep violet, vivid magenta, hot pink, pale pink, 64 MHz](screenshots/amethyst-palette.png) | ![Amethyst palette: black, deep violet, vivid magenta, hot pink, pale pink, 48 MHz](screenshots/amethyst-palette-48mhz.png) |
+| ![Rainbow palette: red, orange, yellow, green, cyan, blue, violet, magenta, 64 MHz](screenshots/rainbow-palette.png) | ![Rainbow palette: red, orange, yellow, green, cyan, blue, violet, magenta, 48 MHz](screenshots/rainbow-palette-48mhz.png) |
 
 Press `Z` to enter **box mode**: 4 corner markers (solid white 2x2
 blocks) appear, outlining a box that always keeps the picture's own
 3:2 aspect ratio:
 
-![Box mode: the 4 corner markers outlining a zoom target](screenshots/zoom-markers.png)
+| 64 MHz (Elite II, C64 Ultimate) | 48 MHz (U64, Elite; 3 of 4 pixels) |
+|---|---|
+| ![Box mode: the 4 corner markers outlining a zoom target, 64 MHz](screenshots/zoom-markers.png) | ![Box mode: the 4 corner markers outlining a zoom target, 48 MHz](screenshots/zoom-markers-48mhz.png) |
 
 | Input | Action |
 |---|---|
@@ -86,7 +92,9 @@ to browse mode. Repeated zooms compose relative to whatever's
 currently displayed, so zooming, panning, and zooming again all work
 together.
 
-![The result of confirming a zoom into the box shown above -- freshly generated detail at the new, tighter view](screenshots/zoomed-in.png)
+| 64 MHz (Elite II, C64 Ultimate) | 48 MHz (U64, Elite; 3 of 4 pixels) |
+|---|---|
+| ![The result of confirming a zoom into the box shown above, 64 MHz](screenshots/zoomed-in.png) | ![The result of confirming a zoom into the box shown above, 48 MHz](screenshots/zoomed-in-48mhz.png) |
 
 **Zoom precision limit**: the fractal coordinates use a fixed-point
 format with a finite number of fractional bits, capping how far
@@ -105,7 +113,7 @@ through them, also while the picture is being computed:
 
 | View | What you see | First picture, Elite II |
 |---|---|---|
-| Bar (default) | An 8-line band through the middle of the picture fills from left to right as a progress bar, then rolls open to the whole picture | 6.9 s |
+| Bar (default) | An 8-line band through the middle of the picture fills from left to right as a progress bar, with a white cursor at its front edge, then rolls open to the whole picture | 6.9 s |
 | Classic | The picture builds up in full, flickering (the live view of v1.0-v1.1) | 11.2 s |
 | Full | The picture builds up in full and steady, without flicker | 38.8 s: showing it takes most of the CPU |
 

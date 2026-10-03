@@ -216,6 +216,13 @@ int main(void)
 	// sync included) is plain busy-polled -- so permanently masking IRQ
 	// costs nothing functionally. NMI (RESTORE key) still isn't masked
 	// by this (SEI can't touch it) but isn't part of this bug family.
+	//
+	// v1.2.0 exception: the Bar and Full live views (upic_viewer.c) run
+	// the library's raster interrupt WHILE a picture is computed. That
+	// is safe from the bug above: it installs its own $FFFE/$FFFA vectors
+	// with the ROMs banked out and switches CIA1's timer interrupts off,
+	// so no interrupt can reach KERNAL/JiffyDOS code, and it masks
+	// interrupts again before browse mode (keyboard polling) resumes.
 	__asm { sei }
 
 	uci_ready = program_startup();
