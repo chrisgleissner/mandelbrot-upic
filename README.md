@@ -27,9 +27,10 @@ See `CREDITS.md` for full attribution.
 hardware: an Ultimate 64 Elite II (64 MHz path) and an Ultimate 64
 Elite (48 MHz path), both on firmware 3.15a.
 
-**[Watch it in action](https://www.youtube.com/watch?v=fWSM7ikNegw)**
--- real-hardware capture: live generation, all 4 palettes, and
-interactive zoom.
+**[Watch it in action](https://www.youtube.com/watch?v=0inIaiqH8s0)**
+-- v1.2.0 on real hardware, captured from the video stream: the three
+live views, all 4 palettes, zooming to the maximum and saving. The
+v1.0 video is [here](https://www.youtube.com/watch?v=fWSM7ikNegw).
 
 ## Contents
 
